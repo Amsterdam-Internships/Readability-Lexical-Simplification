@@ -1,8 +1,6 @@
 # Amsterdam Internships - Example README
 
-Explain in short what this repository is. Mind the target audience.
-No need to go into too much technical details if you expect some people would just use it as end-users 
-and don't care about the internals (so focus on what the code really *does*), not how.
+This repository contains all code that has been used for my Master thesis. 
 The *_How it works_* section below would contain more technical details for curious people.
 
 If applicable, you can also show an example of the final output.
@@ -14,8 +12,6 @@ If applicable, you can also show an example of the final output.
 
 ## Project Folder Structure
 
-Explain briefly what's where so people can find their way around. For example:
-
 There are the following folders in the structure:
 
 1) [`resources`](./resources): Random nice resources, e.g. [`useful links`](./resources/README.md)
@@ -24,22 +20,6 @@ There are the following folders in the structure:
 1) [`tests`](./tests) Test example
 1) [`media`](./media): Folder containing media files (icons, video)
 1) ...
-
-OR
-
-Or use something like `tree` to include the overall structure with preferred level of detail (`-L 2` or `-d` or `-a`...)
-```buildoutcfg
-├── media --> you can still add comments and descriptions in this tree
-│   └── examples
-├── resources --> a lot of useful links here
-├── scripts
-├── src --
-└── tests
-```
-
-
-
-If you are lacking ideas on how to structure your code at the first place, take a look at [`CookieCutter`](https://drivendata.github.io/cookiecutter-data-science/)
 
 ---
 
