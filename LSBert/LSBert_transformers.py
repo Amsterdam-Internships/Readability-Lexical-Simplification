@@ -1,28 +1,33 @@
-
 import argparse
 import os
 import random
 
-from LSBert.pytorch_pretrained_bert import BertTokenizer
-from LSBert.pytorch_pretrained_bert import BertForMaskedLM
+############################################################
+# https://pytorch.org/hub/huggingface_pytorch-transformers/
+
+############################################################
+
+
+# from pytorch_pretrained_bert.tokenization import BertTokenizer
+# from pytorch_pretrained_bert.modeling import BertModel, BertForMaskedLM
 
 from sklearn.metrics.pairwise import cosine_similarity as cosine
-
 
 # OPTIONAL: if you want to have more information on what's happening, activate the logger as follows
 import numpy as np
 import torch
 import nltk
 from scipy.special import softmax
-#from nltk.corpus import stopwords
+# from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
-from LSBert.pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
+# from LSBert.pytorch_pretrained_bert.file_utils import PYTORCH_PRETRAINED_BERT_CACHE
 
 import logging
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 class InputFeatures(object):
     """A single set of features of data."""
@@ -33,6 +38,7 @@ class InputFeatures(object):
         self.input_ids = input_ids
         self.input_mask = input_mask
         self.input_type_ids = input_type_ids
+
 
 def evaluation_pipeline_scores(substitution_words, difficult_words, annotated_subs):
     """
@@ -50,14 +56,15 @@ def evaluation_pipeline_scores(substitution_words, difficult_words, annotated_su
     changed_proportion = 0
 
     for sub, source, gold in zip(substitution_words, difficult_words, annotated_subs):
-        if sub==source or (sub in gold):
+        if sub == source or (sub in gold):
             precision += 1
-        if sub!=source and (sub in gold):
+        if sub != source and (sub in gold):
             accuracy += 1
-        if sub!=source:
+        if sub != source:
             changed_proportion += 1
 
-    return precision/instances, accuracy/instances, changed_proportion/instances
+    return precision / instances, accuracy / instances, changed_proportion / instances
+
 
 def evaluation_SS_scores(candidates_list, annotated_subs):
     """
@@ -85,7 +92,6 @@ def evaluation_SS_scores(candidates_list, annotated_subs):
         # If there are some in common, potential is increased with 1
         if len(common) >= 1:
             potential += 1
-
 
         precision += len(common)
         recall += len(common)
@@ -141,11 +147,11 @@ def get_score(sentence, tokenizer, maskedLM):
     input_ids = tokenizer.convert_tokens_to_ids(tokenized_input)
 
     sentence_loss = 0
-    
+
     for i, word in enumerate(tokenized_input):
 
         # Skip the special BERT tokens:
-        if(word == START_TOKEN or word==SEPARATOR_TOKEN):
+        if (word == START_TOKEN or word == SEPARATOR_TOKEN):
             continue
 
         # Mask the ith token
@@ -158,7 +164,7 @@ def get_score(sentence, tokenizer, maskedLM):
 
         # Make a prediction
         with torch.no_grad():
-            att, prediction_word =maskedLM(mask_input)
+            att, prediction_word = maskedLM(mask_input)
 
         # And calculate the loss
         word_loss = cross_entropy_word(prediction_word[0].cpu().numpy(), i, input_ids[i])
@@ -166,15 +172,15 @@ def get_score(sentence, tokenizer, maskedLM):
 
         # And unmask
         tokenized_input[i] = original_word
-        
-    return np.exp(sentence_loss/len_sen)
+
+    return np.exp(sentence_loss / len_sen)
 
 
 def LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model):
     '''
     :param difficult_word: the difficulted, masked, word
     :param difficult_word_context: the context of the difficult word
-    :param substitution_candidates: the candidates for substitution 
+    :param substitution_candidates: the candidates for substitution
     :param tokenizer: the BERT tokenizer
     :param model: the BERT model
     :return:
@@ -190,7 +196,6 @@ def LM_score(difficult_word, difficult_word_context, substitution_candidates, to
 
     # Create instances where the difficult word is replaced by a substitution and get the corresponding score:
     for substitution in substitution_candidates:
-
         sub_sentence = new_sentence.replace(difficult_word, substitution)
 
         score = get_score(sub_sentence, tokenizer, model)
@@ -209,8 +214,8 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
     :return:
     '''
     selected_subs = []
-    similarity_scores=[]
-    count_scores=[]
+    similarity_scores = []
+    count_scores = []
     frequency_score = 10
 
     # If it is in the frequent words dict, it gets the corresponding count
@@ -220,10 +225,10 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
     in_embedding = True
 
     # Look up the embedding value of the complex word
-    if(difficult_word not in embedding_dict):
+    if (difficult_word not in embedding_dict):
         in_embedding = False
     else:
-        embedding_value = embedding_vector[embedding_dict.index(difficult_word)].reshape(1,-1)
+        embedding_value = embedding_vector[embedding_dict.index(difficult_word)].reshape(1, -1)
 
     # Iterating over the candidate substitutions and attribution values
     for sub in generated_subs:
@@ -234,7 +239,7 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
         # Otherwise, the count feature is set to its count val
         else:
             sub_count = word_count[sub]
-           
+
         # If there is an embedding value for the difficult word and candidate word, the similarity is calculated
         # If there is an enmbedding value for the difficult word, but not for the candidate word, the candidate is discarded
         if in_embedding:
@@ -242,17 +247,18 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
                 continue
 
             token_embedding_index = embedding_dict.index(sub)
-            similarity = cosine(embedding_value, embedding_vector[token_embedding_index].reshape(1,-1))
+            similarity = cosine(embedding_value, embedding_vector[token_embedding_index].reshape(1, -1))
 
             similarity_scores.append(similarity)
 
         selected_subs.append(sub)
         count_scores.append(sub_count)
 
-    return selected_subs,similarity_scores,count_scores
+    return selected_subs, similarity_scores, count_scores
 
 
-def substitution_ranking(difficult_word, difficult_word_context, candidate_words, embedding_vocab, embedding_vectors, word_count,
+def substitution_ranking(difficult_word, difficult_word_context, candidate_words, embedding_vocab, embedding_vectors,
+                         word_count,
                          tokenizer, model, annotations):
     '''
     :param difficult_word: the difficult word that has been masked
@@ -267,27 +273,29 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     :return: pre_word:
     '''
 
-
-    substitution_candidates, similarity_scores, frequency_scores = preprocess_SR(difficult_word, candidate_words, embedding_vocab, embedding_vectors, word_count)
+    substitution_candidates, similarity_scores, frequency_scores = preprocess_SR(difficult_word, candidate_words,
+                                                                                 embedding_vocab, embedding_vectors,
+                                                                                 word_count)
 
     # If there are no candidates left, just return the difficult word
     if len(substitution_candidates) == 0:
         return difficult_word
 
-    # If there are cosine scores calculated:
+        # If there are cosine scores calculated:
         if len(similarity_scores) > 0:
             seq = sorted(similarity_scores, reverse=True)
-            similarity_rank = [seq.index(v) + 1 for v in similarity_scores] # This describes for each subs candidate the position in the ranking
+            similarity_rank = [seq.index(v) + 1 for v in
+                               similarity_scores]  # This describes for each subs candidate the position in the ranking
 
         sorted_count = sorted(count_scores, reverse=True)
 
-        count_rank = [sorted_count.index(v) + 1 for v in count_scores] # This describes for each subs candidate the position in the ranking
+        count_rank = [sorted_count.index(v) + 1 for v in
+                      count_scores]  # This describes for each subs candidate the position in the ranking
 
     lm_score = LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model)
 
-
     rank_lm = sorted(lm_score)
-    lm_rank = [rank_lm.index(v) + 1 for v in lm_score] # The position list of the lm scores
+    lm_rank = [rank_lm.index(v) + 1 for v in lm_score]  # The position list of the lm scores
 
     # Make a list of all indeces
     bert_rank = []
@@ -371,20 +379,19 @@ def convert_whole_word_to_feature(bert_sent, mask_position, seq_length, tokenize
     :return:
     '''
 
-
-    final_tokens = ["[CLS]"] #This will be filled with the tokens?
+    final_tokens = ["[CLS]"]  # This will be filled with the tokens?
     input_type_ids = []
     input_type_ids.append(0)
-    for token in bert_sent:         # Build the sentence back up
+    for token in bert_sent:  # Build the sentence back up
         final_tokens.append(token)
-        input_type_ids.append(0)    # And a corresponding list (first time zeroes) todo: what for?
+        input_type_ids.append(0)  # And a corresponding list (first time zeroes) todo: what for?
 
-    final_tokens.append("[SEP]")    # The sentence ends with [SEP]
+    final_tokens.append("[SEP]")  # The sentence ends with [SEP]
     input_type_ids.append(0)
 
     for token in bert_sent:
         final_tokens.append(token)  # Add them a second time
-        input_type_ids.append(1)    # But then with 1s
+        input_type_ids.append(1)  # But then with 1s
 
     final_tokens.append("[SEP]")
     input_type_ids.append(1)
@@ -503,24 +510,24 @@ def extract_context(words, mask_index, window):
 
     sent_length = len(words)
 
-    half_window = int(window/2)
+    half_window = int(window / 2)
 
     # Check that the difficult word is located inside the sentence
-    assert mask_index>=0 and mask_index<sent_length
+    assert mask_index >= 0 and mask_index < sent_length
 
     context = ""
 
     # If the sentence is shorter than the window, the whole sentence is returned
-    if sent_length<=window:
+    if sent_length <= window:
         context = words
 
     # if the mask is in the first half and the
     elif mask_index < sent_length - half_window and mask_index >= half_window:
-        context = words[mask_index - half_window : mask_index + half_window + 1]
-    elif mask_index<half_window:
+        context = words[mask_index - half_window: mask_index + half_window + 1]
+    elif mask_index < half_window:
         context = words[0:window]
-    elif mask_index>=sent_length-half_window:
-        context = words[sent_length-window:sent_length]
+    elif mask_index >= sent_length - half_window:
+        context = words[sent_length - window:sent_length]
     else:
         print("Wrong!")
 
@@ -876,19 +883,21 @@ def main():
     parser.add_argument('--server_port', type=str, default='', help="Can be used for distant debugging.")
     args = parser.parse_args()
 
-### Location of execution: ###
+    ### Location of execution: ###
     # Change in case of GPU (Check original code)
     device = "cpu"
     n_gpu = torch.cuda.device_count()
-    logger.info("Device/ Training info : \n device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
+    logger.info(
+        "Device/ Training info : \n device: {} n_gpu: {}, distributed training: {}, 16-bits training: {}".format(
             device, n_gpu, bool(args.local_rank != -1), args.fp16))
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
 
-### Opening/ Loading Files ###
+    ### Opening/ Loading Files ###
     # Cache Location:
-    cache_dir = args.cache_dir if args.cache_dir else os.path.join(str(PYTORCH_PRETRAINED_BERT_CACHE),'distributed_{}'.format(args.local_rank))
+    cache_dir = args.cache_dir if args.cache_dir else os.path.join(str("pytorch_pretrained_bert"),
+                                                                   'distributed_{}'.format(args.local_rank))
 
     # Evaluation file:
     evaluation_file_name = args.eval_dir.split('/')[-1][:-4]
@@ -908,7 +917,7 @@ def main():
     # Number of candidates for substitution
     num_selection = args.num_selections
 
-### Start initialization of the model ###
+    ### Start initialization of the model ###
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -916,21 +925,25 @@ def main():
     # if n_gpu > 0:
     #     torch.cuda.manual_seed_all(args.seed)
 
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
-    model = BertForMaskedLM.from_pretrained(args.bert_model, output_attentions=True, cache_dir=cache_dir)
+    # https: // pytorch.org / hub / huggingface_pytorch - transformers /
+    tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'bert-base-uncased')    # Download vocabulary from S3 and cache.
+    # BertTokenizer.from_pretrained(args.bert_model, do_lower_case=args.do_lower_case)
+    model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'GroNLP/bert-base-dutch-cased')    # Download model and configuration from S3 and cache.
+
+    # model = BertForMaskedLM.from_pretrained(args.bert_model, output_attentions=True, cache_dir=cache_dir)
 
     if args.fp16:
         model.half()
     model.to(device)
 
-### Loading in Embeddings ###
+    ### Loading in Embeddings ###
     print("Loading embeddings ...")
     embedding_path = args.word_embeddings
     # the vocabulary of the embedding model in a list, and the corresponding emb values in another
     embedding_vocab, embedding_vectors = getWordmap(embedding_path)
     print("Done loading embeddings")
 
-### Toward Generating the Substitutions:###
+    ### Toward Generating the Substitutions:###
     candidates_list = []
     substitution_words = []
     bre_i = 0
@@ -938,13 +951,13 @@ def main():
 
     # If we want to do evaluation on the candidates and (something with the execution) TODO:What does it do?
     if args.do_eval and (args.local_rank == -1 or torch.distributed.get_rank() == 0):
-        if evaluation_file_name=='lex.mturk':
+        if evaluation_file_name == 'lex.mturk':
             # Retrieve the sentences, difficult words and annotated labels
             eval_sents, difficult_words, annotated_subs = read_eval_dataset_lexmturk(args.eval_dir)
         else:
             eval_sents, difficult_words, annotated_subs = read_eval_index_dataset(args.eval_dir)
 
-### Running the evaluation
+    ### Running the evaluation
     logger.info("***** Running evaluation *****")
     logger.info("  Num examples = %d", len(eval_sents))
 
@@ -958,7 +971,8 @@ def main():
         print('Sentence {} rankings: '.format(i))
 
         # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
-        bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(eval_sents[i], args.max_seq_length, tokenizer)
+        bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(eval_sents[i], args.max_seq_length,
+                                                                               tokenizer)
 
         assert len(nltk_sent) == len(bert_token_positions)
 
@@ -990,12 +1004,12 @@ def main():
         token_type_ids = token_type_ids.to('cpu')
         attention_mask = attention_mask.to('cpu')
 
-### Make predictions for
+        ### Make predictions for
         with torch.no_grad():
             all_attentions, prediction_scores = model(tokens_tensor, token_type_ids, attention_mask)
 
         # BERT's candidates are generated (2 times the required amount) todo:why?
-        if isinstance(mask_position, list): # if tokenized by BERT as multiple subwords
+        if isinstance(mask_position, list):  # if tokenized by BERT as multiple subwords
             predicted_top = prediction_scores[0, mask_position[0]].topk(args.num_selections * 2)
 
         else:
@@ -1005,12 +1019,14 @@ def main():
         predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1].cpu().numpy())
 
         # A hard cut on the selection, leaving maximum num_selection candidates
-        candidate_words = substitution_generation(difficult_words[i], predicted_tokens, predicted_top[0].cpu().numpy(), ps,
+        candidate_words = substitution_generation(difficult_words[i], predicted_tokens, predicted_top[0].cpu().numpy(),
+                                                  ps,
                                                   num_selection)
         print("candidate words", candidate_words)
         candidates_list.append(candidate_words)
 
-        predicted_word = substitution_ranking(difficult_words[i], mask_context, candidate_words, embedding_vocab, embedding_vectors,word_count,tokenizer,model,annotated_subs[i])
+        predicted_word = substitution_ranking(difficult_words[i], mask_context, candidate_words, embedding_vocab,
+                                              embedding_vectors, word_count, tokenizer, model, annotated_subs[i])
         substitution_words.append(predicted_word)
         print("predicted word: ", predicted_word)
 
@@ -1028,7 +1044,8 @@ def main():
     output_sr_file.write('\t')
     print(potential, precision, recall, f_score)
 
-    precision, accuracy, changed_proportion = evaluation_pipeline_scores(substitution_words, difficult_words, annotated_subs)
+    precision, accuracy, changed_proportion = evaluation_pipeline_scores(substitution_words, difficult_words,
+                                                                         annotated_subs)
     print("The score of evaluation for full LS pipeline")
     print(precision, accuracy, changed_proportion)
     output_sr_file.write(str(precision))
@@ -1041,5 +1058,5 @@ def main():
     # output_sr_file.close()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()
