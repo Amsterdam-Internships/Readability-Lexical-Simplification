@@ -1,0 +1,5 @@
+header
+Het kamp van basisschool "De Regenboog" gaat dit jaar naar een andere accomodatie: stadscamping De Zwaluw.	accomodatie	plek	gebouw	locatie
+We zullen een achttal scholen langsgaan voor de kwaliteitscontrole	achttal	acht
+Aldaar troffen wij tot onze grote verbazing een vis.	aldaar	daar	hier	daarzo
+Wij clusteren documenten gebaseerd op onderwerp		clusteren	samenvoegen sorteren	bijeenvoegen
