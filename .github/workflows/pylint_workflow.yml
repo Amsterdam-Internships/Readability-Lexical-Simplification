@@ -28,4 +28,4 @@ jobs:
     - name: pylint
       run: |
         # choose which files to include
-        find .  \( \( -name env -o -name Notebooks \) -prune \) -o -type f -name "*.py" -print | xargs pylint --rcfile /home/runner/work/InternshipAmsterdamGeneral/Readability-Lexical-Simplification/.pylintrc
+        find .  \( \( -name env -o -name Notebooks \) -prune \) -o -type f -name "*.py" -print | xargs pylint --rcfile /.pylintrc
