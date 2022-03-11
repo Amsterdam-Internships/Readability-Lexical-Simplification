@@ -1,7 +1,9 @@
 import argparse
 import os
 import random
-
+""" 
+TODO Description of the module
+"""
 
 from sklearn.metrics.pairwise import cosine_similarity as cosine
 
@@ -67,8 +69,6 @@ def evaluation_SS_scores(candidates_list, annotated_subs):
     # Loop over the candidates
     for i in range(len(candidates_list)):
 
-        one_prec = 0
-
         # The words that are both in the candidates and the annotations:
         common = list(set(candidates_list[i]).intersection(annotated_subs[i]))
 
@@ -118,12 +118,12 @@ def get_score(sentence, tokenizer, maskedLM):
 
     len_sen = len(tokenized_input)
 
-    START_TOKEN = '[CLS]'
-    SEPARATOR_TOKEN = '[SEP]'
+    start_token = '[CLS]'
+    separator_token = '[SEP]'
 
     # Create the input in a way for BERT to understand:
-    tokenized_input.insert(0, START_TOKEN)
-    tokenized_input.append(SEPARATOR_TOKEN)
+    tokenized_input.insert(0, start_token)
+    tokenized_input.append(separator_token)
 
     # Convert the the tokens to input_ids
     input_ids = tokenizer.convert_tokens_to_ids(tokenized_input)
@@ -133,7 +133,7 @@ def get_score(sentence, tokenizer, maskedLM):
     for i, word in enumerate(tokenized_input):
 
         # Skip the special BERT tokens:
-        if (word == START_TOKEN or word == SEPARATOR_TOKEN):
+        if word == start_token or word == separator_token:
             continue
 
         # Mask the ith token
@@ -226,7 +226,7 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
     in_embedding = True
 
     # Look up the embedding value of the complex word
-    if (difficult_word not in embedding_dict):
+    if difficult_word not in embedding_dict:
         in_embedding = False
     else:
         embedding_value = embedding_vector[embedding_dict.index(difficult_word)].reshape(1, -1)
@@ -313,6 +313,11 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     predicted_index = all_ranks.index(min(all_ranks))
     predicted_word = substitution_candidates[predicted_index]
 
+    print(list(zip(substitution_candidates, all_ranks)))
+
+
+
+
     return predicted_word
 
 
@@ -340,12 +345,12 @@ def substitution_generation(difficult_word, predicted_tokens, probabilities, ps,
             continue
 
         # If BERT predicts the actual word, it is not taken into account
-        if (predicted_token == difficult_word):
+        if predicted_token == difficult_word:
             continue
 
         # If the stem of the predicted word is the same as that of the actual, it is not taken in to account
         predicted_token_stem = ps.stem(predicted_token)
-        if (predicted_token_stem == difficult_word_stem):
+        if predicted_token_stem == difficult_word_stem:
             continue
 
         # If the predicted token is very similar to the actual, it is not taken into account
@@ -356,11 +361,11 @@ def substitution_generation(difficult_word, predicted_tokens, probabilities, ps,
         selected_tokens.append(predicted_token)
 
         # If enough tokens have been deleted, it's enough
-        if (len(selected_tokens) == selection_size):
+        if len(selected_tokens) == selection_size:
             break
 
     # If none are good enough for the criteria, the first ones until the selection size are chosen
-    if (len(selected_tokens) == 0):
+    if len(selected_tokens) == 0:
         selected_tokens = predicted_tokens[0:selection_size + 1]
 
     assert len(selected_tokens) > 0
@@ -720,9 +725,9 @@ def getWordCount(word_count_path):
         N = 0
         for i in lines:
             i = i.strip()
-            if (len(i) > 0):
+            if len(i) > 0:
                 i = i.split()
-                if (len(i) == 2):
+                if len(i) == 2:
                     word2count[i[0]] = float(i[1])
                 else:
                     print(i)
@@ -757,8 +762,6 @@ def getWordmap(wordVecPath):
 
         words.append(word)
 
-        # if(n==200000):
-        #    break
     f.close()
     return (words, vectors)
 
