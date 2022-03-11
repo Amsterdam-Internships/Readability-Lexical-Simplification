@@ -1,8 +1,9 @@
-# Amsterdam Internships - Example README
+# Readability : Contextualized Lexical Simplification
 
-This repository contains all code that has been used for my Master thesis. 
+This repository contains all code that has been used for my Master thesis on Contextualized Lexical Simplification. The repository, like my thesis is a work in progress.
+
+
 The *_How it works_* section below would contain more technical details for curious people.
-
 If applicable, you can also show an example of the final output.
 
 ![](media/examples/emojis.png)
@@ -33,7 +34,7 @@ A person should be able to clone this repo, follow your instructions blindly, an
 
 1) Clone this repository:
     ```bash
-    git clone https://github.com/Amsterdam-Internships/InternshipAmsterdamGeneral
+    git clone https://github.com/Amsterdam-Internships/Readability-Lexical-Simplification
     ```
 
 1) If you are using submodules don't forget to include `--recurse-submodules` to the step above or mention that people can still do it afterwards:
@@ -50,27 +51,22 @@ A person should be able to clone this repo, follow your instructions blindly, an
 
 ## Usage
 
-Explain example usage, possible arguments, etc. E.g.:
+For running the Dutch Experiment (the first that has been implemented), the following steps are required:
 
-To train... 
+1) Download a word embedding model from https://github.com/clips/dutchembeddings
+1) And store it in the models folder
 
-
+Then the model can be run as follows:
 ```
-$ python train.py --some-importang-argument
+$ python LSBert_Dutch.py  --eval_dir datasets/small_example_dutch.txt --word_embeddings models/wikipedia-320.txt --word_frequency datasets/dutch_frequencies.txt  --output_SR_file results/aaa
 ```
-
-If there are too many command line arguments, you can add a nice table with explanation (thanks, [Diana Epureano](https://www.linkedin.com/in/diana-epureanu-235104153/)!)
 
 |Argument | Type or Action | Description | Default |
 |---|:---:|:---:|:---:|
-|`--batch_size`| int| `Batch size.`|  32|
-|`--device`| str| `Training device, cpu or cuda:0.`| `cpu`|
-|`--early-stopping`|  `store_true`| `Early stopping for training of sparse transformer.`| True|
-|`--epochs`| int| `Number of epochs.`| 21|
-|`--input_size`|  int| `Input size for model, i.e. the concatenation length of te, se and target.`| 99|
-|`--loss`|  str|  `Type of loss to be used during training. Options: RMSE, MAE.`|`RMSE`|
-|`--lr`|  float| `Learning rate.`| 1e-3|
-|`--train_ratio`|  float| `Percentage of the training set.`| 0.7|
+|`--eval_dir`| str| `path to evaluation data.`|  -|
+|`--word_embeddings`| str| `path to word emedding model.`| -|
+|`--word_frequency`|  str | `path to frequency file`| -|
+|`--output_SR_file`| str| `path to results file`|-|
 |...|...|...|...|
 
 
