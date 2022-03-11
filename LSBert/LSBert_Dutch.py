@@ -1,10 +1,13 @@
 import logging
+import argparse
+import random
+from nltk import PorterStemmer
 from transformers import AutoTokenizer, AutoModelForMaskedLM
+from utils import *
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from utils import *
 
 def main():
     """Parsing the input, and running the first functions"""
@@ -67,7 +70,6 @@ def main():
     ### Location of execution: ###
     device = "cpu"
 
-
     ### Opening/ Loading Files ###
     # Cache Location:
     cache_dir = args.cache_dir
@@ -102,7 +104,6 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained("GroNLP/bert-base-dutch-cased")
     model = AutoModelForMaskedLM.from_pretrained("GroNLP/bert-base-dutch-cased")
 
-
     model.to(device)
 
     ### Loading in Embeddings ###
@@ -118,7 +119,7 @@ def main():
     window_context = 11
 
     ### Retrieve the sentences, complex words and annotated labels ###
-    if evaluation_file_name == 'lex.mturk' or evaluation_file_name == 'small_example_dutch': #Specifically for these files (with header etc)
+    if evaluation_file_name == 'lex.mturk' or evaluation_file_name == 'small_example_dutch':  # Specifically for these files (with header etc)
         eval_sents, complex_words, annotated_subs = read_eval_dataset_lexmturk(args.eval_dir)
     else:
         eval_sents, complex_words, annotated_subs = read_eval_index_dataset(args.eval_dir)
@@ -137,17 +138,17 @@ def main():
 
         # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
         bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(eval_sents[i], args.max_seq_length, tokenizer)
-        print("BERT SENT: ", bert_sent )
+        print("BERT SENT: ", bert_sent)
         print("NLTK SENT: ", nltk_sent)
         assert len(nltk_sent) == len(bert_token_positions)
 
-        mask_index = nltk_sent.index(complex_words[i]) # the location of the complex word:
-        mask_context = extract_context(nltk_sent, mask_index, window_context) # the words surrounding it
+        mask_index = nltk_sent.index(complex_words[i])  # the location of the complex word:
+        mask_context = extract_context(nltk_sent, mask_index, window_context)  # the words surrounding it
 
         len_tokens = len(bert_sent)
-        bert_mask_position = bert_token_positions[mask_index] # BERT index of mask
+        bert_mask_position = bert_token_positions[mask_index]  # BERT index of mask
 
-        if isinstance(bert_mask_position, list): # If the mask is at a sub-word-tokenized token
+        if isinstance(bert_mask_position, list):  # If the mask is at a sub-word-tokenized token
             # This is an instance of the feature class
             feature = convert_whole_word_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
         else:
@@ -168,7 +169,7 @@ def main():
         ### Make predictions ###
         with torch.no_grad():
             # all_attentions, prediction_scores = model(tokens_tensor, token_type_ids, attention_mask)
-            outputs = model(tokens_tensor)#, token_type_ids, attention_mask) EVENK IJKEN WAT DIT DOET
+            outputs = model(tokens_tensor)  #token_type_ids, attention_mask) EVENK IJKEN WAT DIT DOET
             # prediction_scores = prediction_scores[0]
             prediction_scores = outputs[0]
 

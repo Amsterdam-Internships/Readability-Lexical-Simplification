@@ -1,19 +1,14 @@
-import argparse
-import os
-import random
-""" 
-TODO Description of the module
-"""
-
-from sklearn.metrics.pairwise import cosine_similarity as cosine
-
 import numpy as np
 import torch
 import nltk
-from scipy.special import softmax
-from nltk.stem import PorterStemmer
 
-import logging
+from scipy.special import softmax
+from sklearn.metrics.pairwise import cosine_similarity as cosine
+
+
+""" 
+TODO Description of the module
+"""
 class InputFeatures(object):
     """A single set of features of data."""
 
@@ -750,7 +745,7 @@ def getWordmap(wordVecPath):
     lines = f.readlines()
 
     for (n, line) in enumerate(lines):
-        if (n == 0):
+        if n == 0:
             print("Word embedding of size: ", line)
             continue
         word, vector = line.rstrip().split(' ', 1)
@@ -764,4 +759,3 @@ def getWordmap(wordVecPath):
 
     f.close()
     return (words, vectors)
-
