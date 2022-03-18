@@ -288,10 +288,15 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     count_rank = [sorted_count.index(v) + 1 for v in
                   frequency_scores]  # This describes for each subs candidate the position in the ranking
 
-    lm_score = LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model)
 
-    rank_lm = sorted(lm_score)
-    lm_rank = [rank_lm.index(v) + 1 for v in lm_score]  # The position list of the lm scores
+    #LM rank werkt nu ffies niet:
+
+    # lm_score = LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model)
+    #
+    # rank_lm = sorted(lm_score)
+    # lm_rank = [rank_lm.index(v) + 1 for v in lm_score]  # The position list of the lm scores
+
+    lm_rank = [1]*len(substitution_candidates)
 
     # Make a list of all indeces
     bert_rank = []
@@ -309,9 +314,6 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     predicted_word = substitution_candidates[predicted_index]
 
     print(list(zip(substitution_candidates, all_ranks)))
-
-
-
 
     return predicted_word
 
@@ -750,7 +752,6 @@ def getWordmap(wordVecPath):
             continue
         word, vector = line.rstrip().split(' ', 1)
 
-        vector = np.fromstring(vector, sep=' ')
         vector = np.fromstring(vector, sep=' ')
 
         vectors.append(vector)

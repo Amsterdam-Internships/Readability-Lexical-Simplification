@@ -14,6 +14,12 @@ def main():
     global complex_words
     parser = argparse.ArgumentParser()
 
+    # Language of the model to be run:
+    parser.add_argument("--language",
+                        default = "nl",
+                        required=True,
+                        help = "The language of the model")
+
     # Directory of evaluation data (BenchLS/ Lexmturk/ NNSeval)
     # #ToDo Fill in the exact datasets
     parser.add_argument("--eval_dir",
@@ -29,19 +35,19 @@ def main():
                         required=True,
                         help="The output directory of writing substitution selection.")
 
-    # Location of the word embedding model
-    parser.add_argument("--word_embeddings",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The path of word embeddings")
+    # # Location of the word embedding model
+    # parser.add_argument("--word_embeddings",
+    #                     default=None,
+    #                     type=str,
+    #                     required=True,
+    #                     help="The path of word embeddings")
 
     # Location of the word frequency file
-    parser.add_argument("--word_frequency",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The path of word frequency.")
+    # parser.add_argument("--word_frequency",
+    #                     default=None,
+    #                     type=str,
+    #                     required=True,
+    #                     help="The path of word frequency.")
 
     ### Other parameters: ###
 
@@ -80,10 +86,6 @@ def main():
     # Output File:
     output_sr_file = open(args.output_SR_file, "a+")
 
-    # Word Frequency file (wikipedia & a children's book):
-    print("Loading the frequency file:")
-    word_count_path = args.word_frequency
-    word_count = getWordCount(word_count_path) # This is a dictionary with the shape word: frequency
 
     # Loading the stemmer
     ps = PorterStemmer()
@@ -101,14 +103,27 @@ def main():
     # tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'GroNLP/bert-base-dutch-cased')
     # model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'GroNLP/bert-base-dutch-cased')
 
-    tokenizer = AutoTokenizer.from_pretrained("GroNLP/bert-base-dutch-cased")
-    model = AutoModelForMaskedLM.from_pretrained("GroNLP/bert-base-dutch-cased")
+    print("Loading the model and tokenizer")
+    if args.language == "nl":
+        tokenizer = AutoTokenizer.from_pretrained("GroNLP/bert-base-dutch-cased")
+        model = AutoModelForMaskedLM.from_pretrained("GroNLP/bert-base-dutch-cased")
+        embedding_path = "../models/wikipedia-320.txt"
+        word_count_path = "../datasets/dutch_frequencies.txt"
+
+
+    if args.language == "eng":
+        tokenizer = AutoTokenizer.from_pretrained("bert-large-cased-whole-word-masking")
+        model = AutoModelForMaskedLM.from_pretrained("bert-large-cased-whole-word-masking")
+        embedding_path = "../models/crawl-300d-2M-subword.vec"
+        word_count_path = "../datasets/frequency_merge_wiki_child.txt"
+
+    word_count = getWordCount(word_count_path)  # This is a dictionary with the shape word: frequency
 
     model.to(device)
 
     ### Loading in Embeddings ###
     print("Loading embeddings ...")
-    embedding_path = args.word_embeddings
+    # embedding_path = args.word_embeddings
     embedding_vocab, embedding_vectors = getWordmap(embedding_path) # the vocabulary of the embedding model in a list, and the corresponding emb values in another
     print("Done loading embeddings")
 
@@ -143,6 +158,8 @@ def main():
         assert len(nltk_sent) == len(bert_token_positions)
 
         mask_index = nltk_sent.index(complex_words[i])  # the location of the complex word:
+        print("complex word: ", nltk_sent[mask_index])
+
         mask_context = extract_context(nltk_sent, mask_index, window_context)  # the words surrounding it
 
         len_tokens = len(bert_sent)
