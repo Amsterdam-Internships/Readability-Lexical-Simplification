@@ -4,10 +4,11 @@ import random
 from nltk import PorterStemmer
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from utils import *
+from transformers import BertForPreTraining, BertTokenizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
+import torch.nn.functional as F
 
 def main():
     """Parsing the input, and running the first functions"""
@@ -67,7 +68,7 @@ def main():
 
     # Number of training epochs
     parser.add_argument("--num_selections",
-                        default=20,
+                        default=10,
                         type=int,
                         help="Total number of training epochs to perform.")
 
@@ -104,16 +105,29 @@ def main():
     # model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'GroNLP/bert-base-dutch-cased')
 
     print("Loading the model and tokenizer")
+    random.seed(42)
+    np.random.seed(42)
+    torch.manual_seed(42)
+
     if args.language == "nl":
         tokenizer = AutoTokenizer.from_pretrained("GroNLP/bert-base-dutch-cased")
         model = AutoModelForMaskedLM.from_pretrained("GroNLP/bert-base-dutch-cased")
+
         embedding_path = "../models/wikipedia-320.txt"
         word_count_path = "../datasets/dutch_frequencies.txt"
 
 
     if args.language == "eng":
-        tokenizer = AutoTokenizer.from_pretrained("bert-large-cased-whole-word-masking")
-        model = AutoModelForMaskedLM.from_pretrained("bert-large-cased-whole-word-masking")
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+
+        # model = AutoModelForMaskedLM.from_pretrained("bert-large-uncased-whole-word-masking",output_attentions=True)
+        # tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking", lowercase=True)
+
+        # model = BertForPreTraining.from_pretrained("D:\Thesis\model23march")
+        # tokenizer = BertTokenizer.from_pretrained("D:\Thesis\model23march")
+
+
         embedding_path = "../models/crawl-300d-2M-subword.vec"
         word_count_path = "../datasets/frequency_merge_wiki_child.txt"
 
@@ -179,37 +193,33 @@ def main():
         attention_mask = torch.tensor([feature.input_mask])
 
         # And on their way to the CUDA/ CPU
-        tokens_tensor = tokens_tensor.to('cpu')
-        token_type_ids = token_type_ids.to('cpu')
-        attention_mask = attention_mask.to('cpu')
+        # tokens_tensor = tokens_tensor.to('cpu')
+        # token_type_ids = token_type_ids.to('cpu')
+        # attention_mask = attention_mask.to('cpu')
 
         ### Make predictions ###
         with torch.no_grad():
-            # all_attentions, prediction_scores = model(tokens_tensor, token_type_ids, attention_mask)
-            outputs = model(tokens_tensor)  #token_type_ids, attention_mask) EVENK IJKEN WAT DIT DOET
-            # prediction_scores = prediction_scores[0]
-            prediction_scores = outputs[0]
+            output = model(tokens_tensor, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            prediction_scores = output[0]
 
-        # BERT's candidates are generated (2 times the required amount, so that bad candidates can be removed)
-        if isinstance(bert_mask_position, list):  # if tokenized by BERT as multiple subwords
-            # predicted_top = prediction_scores[0, bert_mask_position[0]].topk(args.num_selections * 2)\
-            probs = torch.nn.functional.softmax(prediction_scores[0, bert_mask_position[0]], dim=-1)
-            probabilities, predicted_token_ids = torch.topk(probs, args.num_selections * 2, sorted=True)
-
+        if isinstance(bert_mask_position, list):
+            predicted_top = prediction_scores[0, bert_mask_position[0]].topk(num_selection*2)
         else:
-            # predicted_top = prediction_scores[0, bert_mask_position].topk(args.num_selections * 2)
-            probs = torch.nn.functional.softmax(prediction_scores[0, bert_mask_position], dim=-1)
-            probabilities, predicted_token_ids = torch.topk(probs, args.num_selections * 2, sorted=True)
-            # print("predicted_top2", predicted_top[0].cpu().numpy())
+            predicted_top = prediction_scores[0, bert_mask_position].topk(num_selection*2)
+
+        pre_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
+        pre_probs = F.softmax(predicted_top.values, dim=-1)
+
+        print(list(zip(pre_tokens, pre_probs)))
 
         # predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1].cpu().numpy())
-        predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_token_ids.cpu().numpy())
 
         # A hard cut on the selection, leaving maximum num_selection candidates
-        candidate_words = substitution_generation(complex_words[i], predicted_tokens, probabilities.cpu().numpy(),
+        candidate_words = substitution_generation(complex_words[i], pre_tokens, pre_probs,
                                                   ps,
                                                   num_selection)
         print("candidate words", candidate_words)
+
         candidates_list.append(candidate_words)
 
         predicted_word = substitution_ranking(complex_words[i], mask_context, candidate_words, embedding_vocab,
