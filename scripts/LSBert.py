@@ -118,11 +118,11 @@ def main():
 
 
     if args.language == "eng":
-        tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+        # tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
 
-        # model = AutoModelForMaskedLM.from_pretrained("bert-large-uncased-whole-word-masking",output_attentions=True)
-        # tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking", lowercase=True)
+        model = AutoModelForMaskedLM.from_pretrained("bert-large-uncased-whole-word-masking",output_attentions=True)
+        tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking", lowercase=True)
 
         # model = BertForPreTraining.from_pretrained("D:\Thesis\model23march")
         # tokenizer = BertTokenizer.from_pretrained("D:\Thesis\model23march")

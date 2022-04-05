@@ -19,11 +19,10 @@ class InputFeatures(object):
         self.input_mask = input_mask
         self.input_type_ids = input_type_ids
 
-
-def evaluation_pipeline_scores(substitution_words, difficult_words, annotated_subs):
+def evaluation_pipeline_scores(substitution_words, complex_words, annotated_subs):
     """
     :param substitution_words:
-    :param difficult_words:
+    :param complex_words:
     :param annotated_subs:
     :return:
     """
@@ -35,7 +34,7 @@ def evaluation_pipeline_scores(substitution_words, difficult_words, annotated_su
     accuracy = 0
     changed_proportion = 0
 
-    for sub, source, gold in zip(substitution_words, difficult_words, annotated_subs):
+    for sub, source, gold in zip(substitution_words, complex_words, annotated_subs):
         if sub == source or (sub in gold):
             precision += 1
         if sub != source and (sub in gold):
@@ -44,7 +43,6 @@ def evaluation_pipeline_scores(substitution_words, difficult_words, annotated_su
             changed_proportion += 1
 
     return precision / instances, accuracy / instances, changed_proportion / instances
-
 
 def evaluation_SS_scores(candidates_list, annotated_subs):
     """
@@ -88,7 +86,6 @@ def evaluation_SS_scores(candidates_list, annotated_subs):
 
     return potential, precision, recall, f_score
 
-
 def cross_entropy_word(prediction, position, input_id):
     """
     :param prediction: the prediction from BERT Todo: find out what is exactly happening
@@ -96,113 +93,87 @@ def cross_entropy_word(prediction, position, input_id):
     :param input_id: the input id of the masked word
     :return:
    """
+    
+    # print(X)
+    # print(X[0,2,3])
     prediction = softmax(prediction, axis=1)
     loss = 0
     loss -= np.log10(prediction[position, input_id])
     return loss
 
-
-def get_score(sentence, tokenizer, maskedLM):
+def get_score(sentence, tokenizer, model):
     """
     :param sentence: the (part of the) sentence
     :param tokenizer: the BERT tokenizer
-    :param maskedLM: the BERT model
+    :param model: the BERT model
     :return:
     """
-    tokenized_input = tokenizer.tokenize(sentence)
+    tokenize_input = tokenizer.tokenize(sentence)
 
-    len_sen = len(tokenized_input)
+    len_sen = len(tokenize_input)
 
     start_token = '[CLS]'
     separator_token = '[SEP]'
+    
+    # Input starts with CLS
+    tokenize_input.insert(0, start_token)
+    tokenize_input.append(separator_token)
 
-    # Create the input in a way for BERT to understand:
-    tokenized_input.insert(0, start_token)
-    tokenized_input.append(separator_token)
-
-    # Convert the the tokens to input_ids
-    input_ids = tokenizer.convert_tokens_to_ids(tokenized_input)
+    input_ids = tokenizer.convert_tokens_to_ids(tokenize_input)
 
     sentence_loss = 0
+    
+    for i, word in enumerate(tokenize_input):
 
-    for i, word in enumerate(tokenized_input):
-
-        # Skip the special BERT tokens:
-        if word == start_token or word == separator_token:
+        if (word == start_token or word == separator_token):
             continue
 
-        # Mask the ith token
-        original_word = tokenized_input[i]
-        tokenized_input[i] = '[MASK]'
-
-        # Convert it
-        mask_input = torch.tensor([tokenizer.convert_tokens_to_ids(tokenized_input)])
+        original_word = tokenize_input[i]
+        tokenize_input[i] = '[MASK]'
+        mask_input = torch.tensor([tokenizer.convert_tokens_to_ids(tokenize_input)])
         mask_input = mask_input.to('cpu')
-
-        # Make a prediction
         with torch.no_grad():
-            # att, prediction_word = maskedLM(mask_input)
-            outputs = maskedLM(mask_input)
-            # print("outputs: ",outputs)
-            prediction_word=outputs[0]
-            # print("prediction_word: ", prediction_word)
-            # print("prediction_word[0]", prediction_word[0])
+            output = model(mask_input)
+            prediction_scores = output[0]
 
-
-            probs = torch.nn.functional.softmax(prediction_word[0], dim=-1)
-
-
-        # And calculate the loss
-
-        prediction = probs
-        word_prediction = prediction[i]
-        # print("probs: ",probs)
-
-        word_loss =0
-        # = cross_entropy_word(prediction_word[0].cpu().numpy(), i, input_ids[i])
-        # loss = 0
-        word_loss -= np.log10(word_prediction)
-
-
+        word_loss = cross_entropy_word(prediction_scores[0].cpu().numpy(), i, input_ids[i])
         sentence_loss += word_loss
-
-        # And unmask
-        tokenized_input[i] = original_word
+        tokenize_input[i] = original_word
 
     return np.exp(sentence_loss / len_sen)
 
-
-def LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model):
+def LM_score(complex_word, complex_word_context, substitution_candidates, tokenizer, model):
     """
-    :param difficult_word: the difficulted, masked, word
-    :param difficult_word_context: the context of the difficult word
+    :param complex_word: the complexed, masked, word
+    :param complex_word_context: the context of the complex word
     :param substitution_candidates: the candidates for substitution
     :param tokenizer: the BERT tokenizer
     :param model: the BERT model
     :return:
     """
-    new_sentence = ''
 
-    for context in difficult_word_context:
-        new_sentence += context + " "
+    sub_sentence = ''
 
-    new_sentence = new_sentence.strip()
-    print("new sentence: ", new_sentence)
-    LM_scores = []
+    for context in complex_word_context:
+        sub_sentence += context + " "
 
-    # Create instances where the difficult word is replaced by a substitution and get the corresponding score:
-    for substitution in substitution_candidates:
-        sub_sentence = new_sentence.replace(difficult_word, substitution)
+    sub_sentence = sub_sentence.strip()
+    print("source sentence: ", sub_sentence)
+    LM = []
 
-        score = get_score(sub_sentence, tokenizer, model)
-    LM_scores.append(score)
+    for candidate in substitution_candidates:
+        candidate_sub_sentence = sub_sentence.replace(complex_word, candidate)
 
-    return LM_scores
+        # print(sub_sentence)
+        score = get_score(candidate_sub_sentence, tokenizer, model)
 
+        LM.append(score)
 
-def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vector, word_count):
+    return LM
+
+def preprocess_SR(complex_word, generated_subs, embedding_dict, embedding_vector, word_count):
     """
-    :param difficult_word: the difficulted, masked, word
+    :param complex_word: the complexed, masked, word
     :param generated_subs: the generated simplifications
     :param embedding_dict: the words in the embedding model
     :param embedding_vector: the corresponding vectors in the embedding model
@@ -215,16 +186,16 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
     frequency_score = 10
 
     # If it is in the frequent words dict, it gets the corresponding count
-    if difficult_word in word_count:
-        frequency_score = word_count[difficult_word]
+    if complex_word in word_count:
+        frequency_score = word_count[complex_word]
 
     in_embedding = True
 
     # Look up the embedding value of the complex word
-    if difficult_word not in embedding_dict:
+    if complex_word not in embedding_dict:
         in_embedding = False
     else:
-        embedding_value = embedding_vector[embedding_dict.index(difficult_word)].reshape(1, -1)
+        embedding_value = embedding_vector[embedding_dict.index(complex_word)].reshape(1, -1)
 
     # Iterating over the candidate substitutions and attribution values
     for sub in generated_subs:
@@ -236,8 +207,8 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
         else:
             sub_count = word_count[sub]
 
-        # If there is an embedding value for the difficult word and candidate word, the similarity is calculated
-        # If there is an enmbedding value for the difficult word, but not for the candidate word, the candidate is discarded
+        # If there is an embedding value for the complex word and candidate word, the similarity is calculated
+        # If there is an enmbedding value for the complex word, but not for the candidate word, the candidate is discarded
         if in_embedding:
             if sub not in embedding_dict:
                 continue
@@ -252,13 +223,12 @@ def preprocess_SR(difficult_word, generated_subs, embedding_dict, embedding_vect
 
     return selected_subs, similarity_scores, count_scores
 
-
-def substitution_ranking(difficult_word, difficult_word_context, candidate_words, embedding_vocab, embedding_vectors,
+def substitution_ranking(complex_word, complex_word_context, candidate_words, embedding_vocab, embedding_vectors,
                          word_count,
                          tokenizer, model, annotations):
     """
-    :param difficult_word: the difficult word that has been masked
-    :param difficult_word_context: the words in the context of the difficult word
+    :param complex_word: the complex word that has been masked
+    :param complex_word_context: the words in the context of the complex word
     :param candidate_words: the BERT-generated simplifications
     :param embedding_vocab: the words in the embedding model
     :param embedding_vectors: the corresponding vectors in the embedding model
@@ -269,13 +239,13 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     :return: pre_word:
     """
 
-    substitution_candidates, similarity_scores, frequency_scores = preprocess_SR(difficult_word, candidate_words,
+    substitution_candidates, similarity_scores, frequency_scores = preprocess_SR(complex_word, candidate_words,
                                                                                  embedding_vocab, embedding_vectors,
                                                                                  word_count)
 
-    # If there are no candidates left, just return the difficult word
+    # If there are no candidates left, just return the complex word
     if len(substitution_candidates) == 0:
-        return difficult_word
+        return complex_word
 
     # If there are cosine scores calculated:
     if len(similarity_scores) > 0:
@@ -291,12 +261,12 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
 
     #LM rank werkt nu ffies niet:
 
-    # lm_score = LM_score(difficult_word, difficult_word_context, substitution_candidates, tokenizer, model)
-    #
-    # rank_lm = sorted(lm_score)
-    # lm_rank = [rank_lm.index(v) + 1 for v in lm_score]  # The position list of the lm scores
+    lm_score = LM_score(complex_word, complex_word_context, substitution_candidates, tokenizer, model)
 
-    lm_rank = [1]*len(substitution_candidates)
+    rank_lm = sorted(lm_score)
+    lm_rank = [rank_lm.index(v) + 1 for v in lm_score]  # The position list of the lm scores
+
+    # lm_rank = [1]*len(substitution_candidates)
 
     # Make a list of all indeces
     bert_rank = []
@@ -318,18 +288,18 @@ def substitution_ranking(difficult_word, difficult_word_context, candidate_words
     return predicted_word
 
 
-def substitution_generation(difficult_word, predicted_tokens, probabilities, ps, selection_size=10):
+def substitution_generation(complex_word, predicted_tokens, probabilities, ps, selection_size=10):
     """
-    :param difficult_word: the difficult, masked, target word
-    :param pre_tokens: 20 most likely tokens generated by BERT
-    :param pre_scores: the probabilities of those 20 generated substitutions
+    :param complex_word: the complex, masked, target word
+    :param predicted_tokens: 20 most likely tokens generated by BERT
+    :param probabilities: the probabilities of those 20 generated substitutions
     :param ps: the porter stemmer
-    :param num_selection: the number of likely substitutions to return
+    :param selection_size: the number of likely substitutions to return
     :return:
     """
     selected_tokens = []
 
-    difficult_word_stem = ps.stem(difficult_word)
+    complex_word_stem = ps.stem(complex_word)
 
     assert selection_size <= len(predicted_tokens)
 
@@ -342,16 +312,16 @@ def substitution_generation(difficult_word, predicted_tokens, probabilities, ps,
             continue
 
         # If BERT predicts the actual word, it is not taken into account
-        if predicted_token == difficult_word:
+        if predicted_token == complex_word:
             continue
 
         # If the stem of the predicted word is the same as that of the actual, it is not taken in to account
         predicted_token_stem = ps.stem(predicted_token)
-        if predicted_token_stem == difficult_word_stem:
+        if predicted_token_stem == complex_word_stem:
             continue
 
         # If the predicted token is very similar to the actual, it is not taken into account
-        if (len(predicted_token_stem) >= 3) and (predicted_token_stem[:3] == difficult_word_stem[:3]):
+        if (len(predicted_token_stem) >= 3) and (predicted_token_stem[:3] == complex_word_stem[:3]):
             continue
 
         # If the predicted token is not a subword and is different enough, it is added to the actual
@@ -375,7 +345,7 @@ def convert_whole_word_to_feature(bert_sent, mask_position, seq_length, tokenize
     If a single nltk token is tokenized into multiple subwords for BERT,
     this function transforms a data file into a list of `InputFeature`s.
     :param bert_sent: [CLS] sentence [SEP] masked sentence [CLS]
-    :param mask_position: index of the difficult word/ mask
+    :param mask_position: index of the complex word/ mask
     :type: mask_position: list
     :param seq_length: maximum length of BERT sequence
     :param tokenizer: used BERT tokenizer
@@ -444,7 +414,7 @@ def convert_token_to_feature(final_tokens, mask_position, seq_length, tokenizer)
    If a single nltk token is tokenized into a single token by BERT,
    this function transforms a data file into a list of `InputFeature`s.
    :param final_tokens: [CLS] sentence [SEP] masked sentence [CLS]
-   :param mask_position: index of the difficult word/ mask
+   :param mask_position: index of the complex word/ mask
    :type: mask_position: list
    :param seq_length: maximum length of BERT sequence
    :param tokenizer: used BERT tokenizer
@@ -502,20 +472,20 @@ def convert_token_to_feature(final_tokens, mask_position, seq_length, tokenizer)
 
 def extract_context(words, mask_index, window):
     """
-    This function extracts the context of the difficult word in a sentence
+    This function extracts the context of the complex word in a sentence
     :param words: nltk tokenized sentence
     :type words: list
-    :param mask_index: index of the difficult word
+    :param mask_index: index of the complex word
     :param window: size of context window
     :type window: int
-    :return: context: the words surrounding the difficult words
+    :return: context: the words surrounding the complex words
     """
 
     sent_length = len(words)
 
     half_window = int(window / 2)
 
-    # Check that the difficult word is located inside the sentence
+    # Check that the complex word is located inside the sentence
     assert mask_index >= 0 and mask_index < sent_length
 
     context = ""
@@ -548,17 +518,19 @@ def convert_sentence_to_token(sentence, seq_length, tokenizer):
     :return: position2: list with the token: subword mapping of BERT- nltk
     """
 
-    print("sentence: ", sentence)
+    # print("sentence: ", sentence)
     # Use BERT tokenizer to tokenize text
     bert_sent = tokenizer.tokenize(sentence.lower())
-    # print("BERT tokenized sent:", bert_sent)
+    print()
+    print("BERT tokenized sent:", bert_sent)
 
     # The bert text must be smaller than the maximal length-2 (because of the the CLS tokens)
     assert len(bert_sent) < seq_length - 2
 
     # Then tokenize the sentence with nltk
     nltk_sent = nltk.word_tokenize(sentence.lower())
-    # print("nltk tokenized sent", nltk_sent)
+    print("nltk tokenized sent", nltk_sent)
+    print()
 
     position2 = []
 
@@ -571,16 +543,13 @@ def convert_sentence_to_token(sentence, seq_length, tokenizer):
 
     # Loop over the nltk tokenized words, make some corrections
     for i, nltk_word in enumerate(nltk_sent):
+
         # print("i ", i)
         # print("word ", nltk_word)
         # print("position2", position2)
         # print("token_index",token_index)
         # print("start_pos", start_pos)
         # print("pre_word", pre_word)
-
-        if nltk_word == "n't" and pre_word[-1] == "n":
-            nltk_word = "'t"
-            # print(1,word)
 
         if bert_sent[token_index] == "\"":
             len_token = 2
@@ -624,18 +593,18 @@ def read_eval_dataset_lexmturk(data_path, is_label=True):
     """
     Function to read in the lex.mturk.txt data set.
     :param data_path: location of the lex.mturk.txt file
-    :param is_label: indicates if you are interested in how the difficult words have been annotated (in case of evaluation I guess)
+    :param is_label: indicates if you are interested in how the complex words have been annotated (in case of evaluation I guess)
     :return: sentences: list of sentences
-    :return: difficult_words: list of the difficult words
+    :return: complex_words: list of the complex words
     :return: substitutinos: list of lists of the annotated simplifications
     """
     # To read in the lex.mturk dataset
     sentences = []
-    difficult_words = []
+    complex_words = []
     substitutions = []
     id = 0
 
-    with open(data_path, "r", encoding='ISO-8859-1') as reader:
+    with open(data_path, "r", encoding='UTF-8') as reader:
         while True:
             line = reader.readline()
             if is_label:
@@ -646,11 +615,11 @@ def read_eval_dataset_lexmturk(data_path, is_label=True):
                     break
                 sentence, words = line.strip().split('\t', 1)
                 # print(sentence)
-                difficult_word, labels = words.strip().split('\t', 1)
+                complex_word, labels = words.strip().split('\t', 1)
                 label_list = labels.split('\t')
 
                 sentences.append(sentence)
-                difficult_words.append(difficult_word)
+                complex_words.append(complex_word)
 
                 # Adding every suggested label to a list (once)
                 one_labels = []
@@ -663,23 +632,23 @@ def read_eval_dataset_lexmturk(data_path, is_label=True):
                 # If you don't want the labels
                 if not line:
                     break
-                sentence, difficult_word = line.strip().split('\t')
+                sentence, complex_word = line.strip().split('\t')
                 sentences.append(sentence)
-                difficult_words.append(difficult_word)
-    return sentences, difficult_words, substitutions
+                complex_words.append(complex_word)
+    return sentences, complex_words, substitutions
 
 
 def read_eval_index_dataset(data_path, is_label=True):
     """
     Function to read in the BenchLS data set.
     :param data_path: location of the  file
-    :param is_label: indicates if you are interested in how the difficult words have been annotated (in case of evaluation I guess)
+    :param is_label: indicates if you are interested in how the complex words have been annotated (in case of evaluation I guess)
     :return: sentences: list of sentences
-    :return: difficult_words: list of the difficult words
+    :return: complex_words: list of the complex words
     :return: substitutions: list of lists of the annotated simplifications
     """
     sentences = []
-    difficult_words = []
+    complex_words = []
     substitutions = []
 
     with open(data_path, "r", encoding='ISO-8859-1') as reader:
@@ -690,12 +659,12 @@ def read_eval_index_dataset(data_path, is_label=True):
                 break
             # Collect the sentences and words
             sentence, words = line.strip().split('\t', 1)
-            # Split the words into the difficult word and possible simplifications
-            difficult_word, labels = words.strip().split('\t', 1)
+            # Split the words into the complex word and possible simplifications
+            complex_word, labels = words.strip().split('\t', 1)
             label_list = labels.split('\t')
 
             sentences.append(sentence)
-            difficult_words.append(difficult_word)
+            complex_words.append(complex_word)
 
             # The label annotation have indeces with them, that are unnecessary, they are thus removed
             one_labels = []
@@ -706,7 +675,7 @@ def read_eval_index_dataset(data_path, is_label=True):
 
             substitutions.append(one_labels)
 
-    return sentences, difficult_words, substitutions
+    return sentences, complex_words, substitutions
 
 
 def getWordCount(word_count_path):
