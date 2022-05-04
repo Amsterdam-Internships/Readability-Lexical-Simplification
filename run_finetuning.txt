@@ -1,0 +1,16 @@
+#!/bin/sh
+#SBATCH -N 1
+#SBATCH -t 20:00:00
+#SBATCH --gres=gpu:1
+#SBATCH --partition=gpu_shared
+echo start of job
+module load 2021
+module load Python/3.9.5-GCCcore-10.3.0
+cd
+cd Readability-Lexical-Simplification
+cd scripts
+python3 binary_finetuning.py
+echo end of job
+
+
+

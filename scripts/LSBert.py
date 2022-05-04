@@ -5,10 +5,15 @@ from nltk import PorterStemmer
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from utils import *
 from transformers import BertForPreTraining, BertTokenizer
+from datetime import datetime
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 import torch.nn.functional as F
+
+import nltk
+nltk.download('punkt')
+
 
 def main():
     """Parsing the input, and running the first functions"""
@@ -75,7 +80,7 @@ def main():
     args = parser.parse_args()
 
     ### Location of execution: ###
-    device = "cpu"
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     ### Opening/ Loading Files ###
     # Cache Location:
@@ -87,7 +92,6 @@ def main():
     # Output File:
     output_sr_file = open(args.output_SR_file, "a+")
 
-
     # Loading the stemmer
     ps = PorterStemmer()
 
@@ -95,19 +99,10 @@ def main():
     num_selection = args.num_selections
 
     ### Start initialization of the model ###
-    seed = 42
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
     ### Loading in the Model & Tokenizer ###
-    # tokenizer = torch.hub.load('huggingface/pytorch-transformers', 'tokenizer', 'GroNLP/bert-base-dutch-cased')
-    # model = torch.hub.load('huggingface/pytorch-transformers', 'model', 'GroNLP/bert-base-dutch-cased')
 
     print("Loading the model and tokenizer")
-    random.seed(42)
-    np.random.seed(42)
-    torch.manual_seed(42)
 
     if args.language == "nl":
         tokenizer = AutoTokenizer.from_pretrained("GroNLP/bert-base-dutch-cased")
@@ -116,16 +111,25 @@ def main():
         embedding_path = "../models/wikipedia-320.txt"
         word_count_path = "../datasets/dutch_frequencies.txt"
 
-
     if args.language == "eng":
-        # tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
-        # model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
 
-        model = AutoModelForMaskedLM.from_pretrained("bert-large-uncased-whole-word-masking",output_attentions=True)
-        tokenizer = AutoTokenizer.from_pretrained("bert-large-uncased-whole-word-masking", lowercase=True)
+        # used_model = "bert-base-uncased"
+        # used_model = "bert-base-cased"
+        # used_model = "bert-large-uncased-whole-word-masking"
+        # used_model = "../models/combined_FT_2"
+        used_model = "../models/finetuned_on_gpu"
+        # used_model = "D:/Thesis/combined_FT_2"
+        # used_model = "D:/Thesis/finetuned_on_gpu"
 
-        # model = BertForPreTraining.from_pretrained("D:\Thesis\model23march")
-        # tokenizer = BertTokenizer.from_pretrained("D:\Thesis\model23march")
+
+
+        if used_model.startswith("bert"):
+            tokenizer = AutoTokenizer.from_pretrained(used_model)
+            model = AutoModelForMaskedLM.from_pretrained(used_model)
+
+        else:
+            model = BertForPreTraining.from_pretrained(used_model)
+            tokenizer = BertTokenizer.from_pretrained(used_model)
 
 
         embedding_path = "../models/crawl-300d-2M-subword.vec"
@@ -137,7 +141,6 @@ def main():
 
     ### Loading in Embeddings ###
     print("Loading embeddings ...")
-    # embedding_path = args.word_embeddings
     embedding_vocab, embedding_vectors = getWordmap(embedding_path) # the vocabulary of the embedding model in a list, and the corresponding emb values in another
     print("Done loading embeddings")
 
@@ -162,73 +165,93 @@ def main():
     eval_size = len(eval_sents)
 
     ### Loop over the evaluation sentences: ###
-    for i in range(eval_size):
-        print('Sentence {}: '.format(i))
+    now = datetime.now()
+    now_string = now.strftime("%d-%m-%Y-%H:%M")
+    used_model = used_model.replace("../models/", "")
 
-        # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
-        bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(eval_sents[i], args.max_seq_length, tokenizer)
-        print("BERT SENT: ", bert_sent)
-        print("NLTK SENT: ", nltk_sent)
-        assert len(nltk_sent) == len(bert_token_positions)
+    with open("../results/"+used_model+now_string+".txt", "w", encoding="UTF-8") as outfile:
 
-        mask_index = nltk_sent.index(complex_words[i])  # the location of the complex word:
-        print("complex word: ", nltk_sent[mask_index])
+        for i in range(eval_size):
+            logger.info("***** next sentence *****")
 
-        mask_context = extract_context(nltk_sent, mask_index, window_context)  # the words surrounding it
+            print( f"_______________________\nSENTENCE{i} \n")
+            sentence = eval_sents[i]
+            print(sentence)
 
-        len_tokens = len(bert_sent)
-        bert_mask_position = bert_token_positions[mask_index]  # BERT index of mask
+            outfile.write(str(sentence)+"\t")
 
-        if isinstance(bert_mask_position, list):  # If the mask is at a sub-word-tokenized token
-            # This is an instance of the feature class
-            feature = convert_whole_word_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
-        else:
-            feature = convert_token_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
-        tokens_tensor = torch.tensor([feature.input_ids])
+            # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
+            bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(eval_sents[i], args.max_seq_length, tokenizer)
 
-        # Something with masking/ attention
-        token_type_ids = torch.tensor([feature.input_type_ids])
+            assert len(nltk_sent) == len(bert_token_positions)
+            complex_word = complex_words[i]
+            print("complex word", complex_word, "\n")
 
-        # Something with masking
-        attention_mask = torch.tensor([feature.input_mask])
+            mask_index = nltk_sent.index(complex_words[i])  # the location of the complex word:
+            outfile.write(nltk_sent[mask_index])
 
-        # And on their way to the CUDA/ CPU
-        # tokens_tensor = tokens_tensor.to('cpu')
-        # token_type_ids = token_type_ids.to('cpu')
-        # attention_mask = attention_mask.to('cpu')
+            mask_context = extract_context(nltk_sent, mask_index, window_context)  # the words surrounding it
 
-        ### Make predictions ###
-        with torch.no_grad():
-            output = model(tokens_tensor, attention_mask=attention_mask, token_type_ids=token_type_ids)
-            prediction_scores = output[0]
+            len_tokens = len(bert_sent)
+            bert_mask_position = bert_token_positions[mask_index]  # BERT index of mask
 
-        if isinstance(bert_mask_position, list):
-            predicted_top = prediction_scores[0, bert_mask_position[0]].topk(num_selection*2)
-        else:
-            predicted_top = prediction_scores[0, bert_mask_position].topk(num_selection*2)
+            if isinstance(bert_mask_position, list):  # If the mask is at a sub-word-tokenized token
+                # This is an instance of the feature class
+                feature = convert_whole_word_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
+            else:
+                feature = convert_token_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
+            tokens_tensor = torch.tensor([feature.input_ids])
 
-        pre_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
-        pre_probs = F.softmax(predicted_top.values, dim=-1)
+            # Something with masking/ attention
+            token_type_ids = torch.tensor([feature.input_type_ids])
 
-        print(list(zip(pre_tokens, pre_probs)))
+            # Something with masking
+            attention_mask = torch.tensor([feature.input_mask])
 
-        # predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1].cpu().numpy())
+            # And on their way to the CUDA/ CPU
+            tokens_tensor = tokens_tensor.to(device)
+            token_type_ids = token_type_ids.to(device)
+            attention_mask = attention_mask.to(device)
 
-        # A hard cut on the selection, leaving maximum num_selection candidates
-        candidate_words = substitution_generation(complex_words[i], pre_tokens, pre_probs,
-                                                  ps,
-                                                  num_selection)
-        print("candidate words", candidate_words)
+            ### Make predictions ###
+            with torch.no_grad():
+                output = model(tokens_tensor, attention_mask=attention_mask, token_type_ids=token_type_ids)
+                prediction_scores = output[0]
 
-        candidates_list.append(candidate_words)
+            if isinstance(bert_mask_position, list):
+                predicted_top = prediction_scores[0, bert_mask_position[0]].topk(num_selection*2)
+            else:
+                predicted_top = prediction_scores[0, bert_mask_position].topk(num_selection*2)
 
-        predicted_word = substitution_ranking(complex_words[i], mask_context, candidate_words, embedding_vocab,
-                                              embedding_vectors, word_count, tokenizer, model, annotated_subs[i])
-        substitution_words.append(predicted_word)
-        print("predicted word: ", predicted_word)
+            pre_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
+            pre_probs = F.softmax(predicted_top.values, dim=-1)
+
+            # A hard cut on the selection, leaving maximum num_selection candidates
+            candidate_words = substitution_generation(complex_words[i], pre_tokens, pre_probs,
+                                                      ps,
+                                                      num_selection)
+
+            for cand in candidate_words:
+                outfile.write(cand + "\t")
+
+            # print("candidate words", candidate_words)
+
+            candidates_list.append(candidate_words)
+
+            highest_preds = substitution_ranking(complex_words[i], mask_context, candidate_words, embedding_vocab,
+                                                 embedding_vectors, word_count, tokenizer, model, annotated_subs[i])
+            for word in highest_preds:
+                outfile.write("\t"+word)
+            outfile.write("\n")
+
+            predicted_word = highest_preds[0]
+            substitution_words.append(predicted_word)
+            print("predicted word: ", predicted_word)
+
 
     potential, precision, recall, f_score = evaluation_SS_scores(candidates_list, annotated_subs)
     print("The score of evaluation for substitution selection")
+    output_sr_file.write(str(used_model))
     output_sr_file.write(str(args.num_selections))
     output_sr_file.write('\t')
     output_sr_file.write(str(potential))
@@ -252,7 +275,7 @@ def main():
     output_sr_file.write(str(changed_proportion))
     output_sr_file.write('\n')
 
-    # output_sr_file.close()
+    output_sr_file.close()
 
 
 if __name__ == "__main__":
