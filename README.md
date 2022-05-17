@@ -44,45 +44,39 @@ In order to run all steps of the lexical simplification pipeline, follow these s
 
 Simplifications can be made on English and Dutch. They require a number of files:
 
-**English** 
+**Deploying the pipeline for English** 
 1) Download a word embedding model from (fasttext) and store it in the models folder as __crawl-300d-2M-subword.vec__
-1) Download the BenchLS dataset and store it in the models folder
+1) Download the BenchLS, NNSeval and lex.mturk datasets from https://simpatico-project.com/?page_id=109 dataset and store them in the models folder
 
 ```
 $ python LSBert.py --language eng --eval_dir ../datasets/NNSeval.txt --output_SR_file ../results/aaa
 ```
 
-**Dutch**
+**Deploying the pipeline for Dutch**
 1) Download the word embedding model from https://dumps.wikimedia.org/nlwiki/20160501/ and store it in the models folder as __wikipedia-320.txt__
 
 
 Then the model can be run as follows:
 ```
-$ python LSBert.py  --eval_dir ../datasets/small_example_dutch.txt --word_embeddings ../models/wikipedia-320.txt --word_frequency datasets/dutch_frequencies.txt  --output_SR_file results/aaa
+python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datasets/Dutch/dutch_sents_for_annotation.txt --results_file ../results/dutch_base_results.txt --out_file ../results/dutch_base_perfromance.txt
 ```
 
-[comment]: <> (|Argument | Type or Action | Description | Default |)
-
-[comment]: <> (|---|:---:|:---:|:---:|)
-
-[comment]: <> (|`--eval_dir`| str| `path to evaluation data.`|  -|)
-
-[comment]: <> (|`--word_embeddings`| str| `path to word emedding model.`| -|)
-
-[comment]: <> (|`--word_frequency`|  str | `path to frequency file`| -|)
-
-[comment]: <> (|`--output_SR_file`| str| `path to results file`|-|)
-
-[comment]: <> (|...|...|...|...|)
+|Argument | Type or Action | Description | Default |
+|---|:---:|:---:|:---:|
+|`--model`| str| `the name of the model that is used for generating the predictions: a path to a folder or a huggingface directory.`|  -|
+|`--eval_dir`| str| `path to the file with the to-be-simplified sentences.`| -|
+|`--results_file`|  str | `path to file where the performance report is written out`| -|
+|`--out_file`| str| `path to file where all the model's predictions are `|-|
+|`--analysis`| Bool| `whether or not to output all the generated candidates and the reason for their removal `|False|
+|---|:---:|:---:|:---:|
 
 ---
 
+**Finetuning a Model**
 
 ## How it works
 
-You can explain roughly how the code works, what the main components are, how certain crucial steps are performed...
 
----
 ## Acknowledgements
 
 
@@ -90,5 +84,4 @@ Don't forget to acknowledge any work by others that you have used for your proje
 For example:
 
 [comment]: <> (Our code uses [YOLOv5]&#40;https://github.com/ultralytics/yolov5&#41; [![DOI]&#40;https://zenodo.org/badge/264818686.svg&#41;]&#40;https://zenodo.org/badge/latestdoi/264818686&#41;)
-This code is based on the LSBert pipeline: https://github.com/q
-iang2100/BERT-LS
+This code is based on the LSBert pipeline: https://github.com/qiang2100/BERT-LS
