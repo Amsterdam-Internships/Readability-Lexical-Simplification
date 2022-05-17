@@ -1,3 +1,0 @@
-in March 1992 , Linux version 0.95 was the first to be capable of running X . This large version number jump was due to a feeling that a version 1.0 with no major missing pieces was imminent .	pieces	35	1:parts	2:bits	3:components	4:information	4:elements	4:items	4:component	4:part	4:sections
-much of the water carried by these streams is diverted .	diverted	9	1:redirected	2:rerouted	3:changed	3:moved	4:separated	4:turned	4:altered	4:split	4:switched	5:veered	5:channeled	5:deflected
-Harry also becomes the worthy possessor of the remaining deathly Hallows : the invisibility cloak and the Resurrection Stone , hence becoming the true Master of Death .	possessor	5	1:owner	2:holder	3:keeper	4:buyer	4:master	4:teacher

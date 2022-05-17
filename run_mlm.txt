@@ -9,7 +9,7 @@ module load Python/3.9.5-GCCcore-10.3.0
 cd
 cd Readability-Lexical-Simplification
 cd scripts
-python3 Dutch.py --eval_dir ../datasets/Dutch/dutch_sents_for_annotation.txt.txt
+python3 run_mlm_on_simple_data.py
 echo end of job
 
 

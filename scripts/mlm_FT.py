@@ -6,67 +6,58 @@ from transformers import BertForPreTraining
 from transformers import AdamW
 import os
 import argparse
-import torch.optim as optim
 from tqdm import tqdm
 
+
 class OurDataset(torch.utils.data.Dataset):
+
     def __init__(self, encodings):
         self.encodings = encodings
+
     def __getitem__(self, idx):
         return {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
+
     def __len__(self):
         return len(self.encodings.input_ids)
 
-def create_input(data):
-    normal_sents = data['sentence'].tolist()
-    simple_sents = data['sentence_simple'].tolist()
+
+def create_input(simple):
+
+    simple_sents = simple['sentence'].tolist()
+    simple_sents = simple_sents[:50000]
+
+    bag = [item for sentence in simple_sents for item in sentence.split('.') if item != '']
+    bag_size = len(bag)
 
     sentence_a = []
     sentence_b = []
     label = []
 
     i = 0
-    for normal_sent, simple_sent in zip(normal_sents, simple_sents):
-        i+=1
-        if i>10000:
-            break
-        random_number = random.random()
-        if random_number > 0.5:
-            sentence_a.append(normal_sent)
-            sentence_b.append(simple_sent)
-            label.append(1)
-        else:
-            sentence_a.append(simple_sent)
-            sentence_b.append(normal_sent)
-            label.append(0)
+    for paragraph in simple_sents:
+        sentences = [sentence for sentence in paragraph.split('.') if sentence != '']
+        num_sentences = len(sentences)
+
+        if num_sentences > 1:
+            start = random.randint(0, num_sentences - 2)
+            # 50/50 whether is IsNextSentence or NotNextSentence
+
+            if random.random() >= 0.5:
+                # this is IsNextSentence
+                sentence_a.append(sentences[start])
+                sentence_b.append(sentences[start + 1])
+                label.append(0)
+
+            else:
+                index = random.randint(0, bag_size - 1)
+                # this is NotNextSentence
+                sentence_a.append(sentences[start])
+                sentence_b.append(bag[index])
+                label.append(1)
     return sentence_a, sentence_b, label
 
 
-# def create_input(normal, simple):
-#     normal_sents = normal['sentence'].tolist()
-#     simple_sents = simple['sentence'].tolist()
-#
-#     sentence_a = []
-#     sentence_b = []
-#     label = []
-#
-#     i = 0
-#     for normal_sent, simple_sent in zip(normal_sents, simple_sents):
-#         i+=1
-#         if i>50000:
-#             break
-#         random_number = random.random()
-#         if random_number > 0.5:
-#             sentence_a.append(normal_sent)
-#             sentence_b.append(simple_sent)
-#             label.append(1)
-#         else:
-#             sentence_a.append(simple_sent)
-#             sentence_b.append(normal_sent)
-#             label.append(0)
-#     return sentence_a, sentence_b, label
-
-def create_labels(inputs,label):
+def create_labels(inputs, label):
     # Creating labels for NSP
     inputs['next_sentence_label'] = torch.LongTensor([label]).T
     inputs['labels'] = inputs.input_ids.detach().clone()
@@ -81,6 +72,7 @@ def create_labels(inputs,label):
     for i in range(inputs.input_ids.shape[0]):
         inputs.input_ids[i, selection[i]] = 103
     return inputs
+
 
 def run_training(model, optim, loader, device):
     epochs = 2
@@ -127,7 +119,7 @@ def main():
     # Directory of evaluation data (BenchLS/ Lexmturk/ NNSeval)
     # #ToDo Fill in the exact datasets
     parser.add_argument("--lr",
-                        default=5e-5,
+                        default=5e-7,
                         type=int,
                         required=False,
                         help="The learning rate")
@@ -138,18 +130,12 @@ def main():
     tokenizer = BertTokenizerFast.from_pretrained('bert-large-uncased-whole-word-masking')
 
     print("Loading in data")
-    # normal = pd.read_csv("../datasets/Wikipedia simple/normal.aligned", sep="\t",
-    #                      names=["subject", "nr", "sentence"])
-    # simple = pd.read_csv("../datasets/Wikipedia simple/simple.aligned", sep="\t",
-    #                      names=["subject", "nr", "sentence"])
+    simple = pd.read_csv("../datasets/Wikipedia simple/simple.aligned", sep="\t",
+                         names=["subject", "nr", "sentence"])
 
-    data = pd.read_csv("../datasets/simplification_classification (1).csv")
-
-    # sentence_a, sentence_b, label = create_input(normal, simple)
-    sentence_a, sentence_b, label = create_input(data)
-
+    sentence_a, sentence_b, label = create_input(simple)
     tokenized_sentences = tokenizer(sentence_a, sentence_b, return_tensors='pt',
-                       max_length=250, truncation=True, padding='max_length')
+                                    max_length=250, truncation=True, padding='max_length')
 
     inputs = create_labels(tokenized_sentences, label)
     dataset = OurDataset(inputs)
@@ -164,7 +150,7 @@ def main():
     optim = AdamW(model.parameters(), args.lr)
     run_training(model, optim, loader, device)
 
-    output_dir = '../models/FT_binary_best_random   '
+    output_dir = f'../models/finetuned_mlm_50000_5e7    '
 
     # Create output directory if needed
     if not os.path.exists(output_dir):

@@ -64,6 +64,12 @@ def main():
                         required=True,
                         help="The output directory for generated simplifications.")
 
+    parser.add_argument("--analysis",
+                        default=False,
+                        type=str,
+                        required=True,
+                        help="Whether to output analysis information.")
+
     args = parser.parse_args()
 
     evaluation_file_name = args.eval_dir.split('/')[-1][:-4]  # Evaluation file:
@@ -126,8 +132,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     # Location of execution:
     model.to(device)
 
-
-    with open(args.out_file,"w", encoding="UTF-8") as outfile:
+    with open(args.out_file, "w", encoding="UTF-8") as outfile:
 
         for i in range(eval_size):
             logger.info("***** next sentence *****")
@@ -143,6 +148,8 @@ def main():
             # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
             bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(sentence, args.max_seq_length,
                                                                                    tokenizer)
+            logger.info(f"bert sent:{bert_sent}")
+            logger.info(f"nltk sent:{nltk_sent}")
             # Check alignment
             assert len(nltk_sent) == len(bert_token_positions)
 
@@ -183,13 +190,20 @@ def main():
                 predicted_top = prediction_scores[0, bert_mask_position].topk(num_selection * 2)
 
             predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
-            # predicted_probs = f.softmax(predicted_top.values, dim=-1)
+            # if args.analysis:
+                # with open("../analyis.txt", "w") as analysis_file:
+                #     analysis_file.write(sentence + "\t")
+                #     for pred_tok in predicted_tokens:
+                #         analysis_file.write(pred_tok+"\t")
+                #     analysis_file.write("\n")
 
             # A hard cut on the selection, leaving maximum num_selection candidates
             candidate_words = substitution_selection(complex_words[i],
                                                      predicted_tokens,
                                                      ps,
-                                                     num_selection)
+                                                     args.analysis,
+                                                     num_selection
+                                                     )
 
             candidates_list.append(candidate_words)
 
@@ -210,20 +224,21 @@ def main():
             predicted_word = highest_predictions[0]
             final_predictions.append(predicted_word)
 
-    potential, precision, recall, f_score = generation_evaluation(candidates_list, annotated_subs)
-    print("The score of evaluation for substitution selection")
-    results_file.write(str(used_model))
-    results_file.write(str(args.num_selections))
-    results_file.write('\t')
-    results_file.write(str(potential))
-    results_file.write('\t')
-    results_file.write(str(precision))
-    results_file.write('\t')
-    results_file.write(str(recall))
-    results_file.write('\t')
-    results_file.write(str(f_score))
-    results_file.write('\t')
-    print(potential, precision, recall, f_score)
+    if "dutch" not in used_model:
+        potential, precision, recall, f_score = generation_evaluation(candidates_list, annotated_subs)
+        print("The score of evaluation for substitution selection")
+        results_file.write(str(used_model))
+        results_file.write(str(args.num_selections))
+        results_file.write('\t')
+        results_file.write(str(potential))
+        results_file.write('\t')
+        results_file.write(str(precision))
+        results_file.write('\t')
+        results_file.write(str(recall))
+        results_file.write('\t')
+        results_file.write(str(f_score))
+        results_file.write('\t')
+        print(potential, precision, recall, f_score)
 
     precision, accuracy, changed_proportion = pipeline_evaluation(final_predictions,
                                                                   complex_words,
