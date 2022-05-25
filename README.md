@@ -48,10 +48,6 @@ Simplifications can be made on English and Dutch. They require a number of files
 1) Download a word embedding model from (fasttext) and store it in the models folder as __crawl-300d-2M-subword.vec__
 1) Download the BenchLS, NNSeval and lex.mturk datasets from https://simpatico-project.com/?page_id=109 dataset and store them in the models folder
 
-```
-$ python LSBert.py --language eng --eval_dir ../datasets/NNSeval.txt --output_SR_file ../results/aaa
-```
-
 **Deploying the pipeline for Dutch**
 1) Download the word embedding model from https://dumps.wikimedia.org/nlwiki/20160501/ and store it in the models folder as __wikipedia-320.txt__
 
@@ -72,7 +68,12 @@ python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datase
 
 ---
 
-**Finetuning a Model**
+## Finetuning a Model
+
+Can be done in one of two ways: todo explain
+
+## Generating Dutch Dataset Sentence
+Todo clean and commit
 
 ## How it works
 
