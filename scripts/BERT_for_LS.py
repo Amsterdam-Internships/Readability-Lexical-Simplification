@@ -1,6 +1,5 @@
 import logging
 import argparse
-import spacy
 
 from nltk import PorterStemmer
 from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -12,10 +11,9 @@ from transformers import BertForPreTraining, BertTokenizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-nlp = spacy.load("nl_core_news_sm")
 
 
-def main():
+def main(my_args=None):
     """
     Parsing the input and running the functions
     """
@@ -23,59 +21,83 @@ def main():
     parser = argparse.ArgumentParser()
     global complex_words
 
-    # Model to be run:
-    parser.add_argument("--model",
-                        default=None,
-                        required=True,
-                        help="The language of the model")
+    if my_args ==None:
 
-    # Directory of evaluation data (BenchLS/ Lexmturk/ NNSeval/ Dutch)
-    parser.add_argument("--eval_dir",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The evaluation data directory.")
+        # Model to be run:
+        parser.add_argument("--model",
+                            default=None,
+                            required=True,
+                            help="The language of the model")
 
-    # The maximum total input sequence length after WordPiece tokenization
-    parser.add_argument("--max_seq_length",
-                        default=250,
-                        type=int,
-                        help="The maximum total input sequence length after WordPiece tokenization. \n"
-                             "Sequences longer than this will be truncated, and sequences shorter \n"
-                             "than this will be padded.")
+        # Directory of evaluation data (BenchLS/ Lexmturk/ NNSeval/ Dutch)
+        parser.add_argument("--eval_dir",
+                            default=None,
+                            type=str,
+                            required=True,
+                            help="The evaluation data directory.")
 
-    # Number of generated simplifications
-    parser.add_argument("--num_selections",
-                        default=10,
-                        type=int,
-                        help="Total number of generated simplifications.")
+        # The maximum total input sequence length after WordPiece tokenization
+        parser.add_argument("--max_seq_length",
+                            default=250,
+                            type=int,
+                            help="The maximum total input sequence length after WordPiece tokenization. \n"
+                                 "Sequences longer than this will be truncated, and sequences shorter \n"
+                                 "than this will be padded.")
 
-    # Location of results file
-    parser.add_argument("--results_file",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The output directory for the results.")
+        # Number of generated simplifications
+        parser.add_argument("--num_selections",
+                            default=10,
+                            type=int,
+                            help="Total number of generated simplifications.")
 
-    # Location of output file
-    parser.add_argument("--out_file",
-                        default=None,
-                        type=str,
-                        required=True,
-                        help="The output directory for generated simplifications.")
+        # # Location of results file
+        # parser.add_argument("--results_file",
+        #                     default=None,
+        #                     type=str,
+        #                     required=True,
+        #                     help="The output directory for the results.")
+        #
+        # # Location of output file
+        # parser.add_argument("--out_file",
+        #                     default=None,
+        #                     type=str,
+        #                     required=True,
+        #                     help="The output directory for generated simplifications.")
 
-    parser.add_argument("--analysis",
-                        default=False,
-                        type=str,
-                        required=True,
-                        help="Whether to output analysis information.")
+        parser.add_argument("--analysis",
+                            default=False,
+                            type=bool,
+                            required=False,
+                            help="Whether to output analysis information.")
 
-    args = parser.parse_args()
 
-    evaluation_file_name = args.eval_dir.split('/')[-1][:-4]  # Evaluation file:
-    num_selection = args.num_selections     # Number of candidates for substitution
-    used_model = args.model
-    results_file = open(args.results_file, "a+")
+        # Parsing Command line input
+        args = parser.parse_args()
+
+        used_model = args.model
+        eval_dir = args.eval_dir
+        evaluation_file_name = args.eval_dir.split('/')[-1][:-4]  # Evaluation file:
+        max_seq_length = args.max_seq_length
+        num_selections = args.num_selections     # Number of candidates for substitution
+        # results_file = open(args.results_file, "a+")
+        # out_file = args.out_file
+        analysis = args.analysis
+
+    else:
+        # Parsing internal input
+        used_model = my_args[0]
+        eval_dir = my_args[1]
+        evaluation_file_name = eval_dir.split('/')[-1][:-4]  # Evaluation file:
+        max_seq_length = int(my_args[2])
+        num_selections = int(my_args[3])    # Number of candidates for substitution
+        # results_file = open(my_args[4], "a+")
+        # out_file = my_args[5]
+        analysis = bool(my_args[4])
+
+    model_name = used_model.replace("../models/", "").replace("/","")
+
+    results_file = open(f"../results/{evaluation_file_name}_{model_name}_results.txt","a")
+    out_file = f"../results/{evaluation_file_name}_{model_name}_outputs.txt"
 
     ps = PorterStemmer()     # Loading the stemmer
 
@@ -83,14 +105,17 @@ def main():
     logger.info("Loading the model and tokenizer")
 
     if used_model.startswith("bert"):  # If it is from the huggingface library
+        logger.info("you are using a model from the huggingface library")
         tokenizer = AutoTokenizer.from_pretrained(used_model)
         model = AutoModelForMaskedLM.from_pretrained(used_model)
 
     else:  # If it was finetuned
+        logger.info("you are using a custom model")
         model = BertForPreTraining.from_pretrained(used_model)
         tokenizer = BertTokenizer.from_pretrained(used_model)
 
     if "dutch" in used_model:  # If it's a dutch model, it needs the dutch files
+        logger.info("you are using a Dutch model")
         embedding_path = "../models/wikipedia-320.txt"
         word_count_path = "../datasets/dutch_frequencies.txt"
         lower_case = False
@@ -116,9 +141,11 @@ def main():
 
     # Retrieve the sentences, complex words and annotated labels
     if evaluation_file_name == 'lex.mturk':  # Specifically for these files (with header etc)
-        eval_sents, complex_words, annotated_subs = read_eval_dataset_lexmturk(args.eval_dir)
+        eval_sents, complex_words, annotated_subs = read_eval_dataset_lexmturk(eval_dir)
+    elif "dutch" in evaluation_file_name:
+        eval_sents, complex_words, annotated_subs = read_eval_dataset_dutch(eval_dir)
     else:
-        eval_sents, complex_words, annotated_subs = read_eval_index_dataset(args.eval_dir)
+        eval_sents, complex_words, annotated_subs = read_eval_index_dataset(eval_dir)
 
     # Starting the evaluation
     logger.info("***** Running evaluation *****")
@@ -132,10 +159,10 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')     # Location of execution:
     model.to(device)
 
-    with open(args.out_file, "w", encoding="UTF-8") as outfile:
+    with open(out_file, "w", encoding="UTF-8") as outfile:
 
         for i in range(eval_size):
-            logger.info("***** next sentence *****")
+            logger.info(f"***** Sentence {i} of {eval_size} *****")
             sentence = eval_sents[i]
 
             logger.info(f"sentence: {sentence}")
@@ -146,17 +173,17 @@ def main():
             outfile.write(str(sentence)+"\t")
 
             # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
-            bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(sentence, args.max_seq_length,
+            bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(sentence, max_seq_length,
                                                                                    tokenizer)
             logger.info(f"bert sent:{bert_sent}")
             logger.info(f"nltk sent:{nltk_sent}")
             # Check alignment
             assert len(nltk_sent) == len(bert_token_positions)
 
-            complex_word = complex_words[i]
+            complex_word = complex_words[i].lower()
             logger.info(f"complex word: {complex_word}")
 
-            mask_index = nltk_sent.index(complex_words[i])  # the location of the complex word:
+            mask_index = nltk_sent.index(complex_word)  # the location of the complex word:
             outfile.write(nltk_sent[mask_index])
 
             mask_context = extract_context(nltk_sent, mask_index, window_context)  # the words surrounding it
@@ -165,9 +192,9 @@ def main():
 
             if isinstance(bert_mask_position, list):  # If the mask is at a sub-word-tokenized token
                 # This is an instance of the feature class
-                feature = convert_whole_word_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
+                feature = convert_whole_word_to_feature(bert_sent, bert_mask_position, max_seq_length, tokenizer)
             else:
-                feature = convert_token_to_feature(bert_sent, bert_mask_position, args.max_seq_length, tokenizer)
+                feature = convert_token_to_feature(bert_sent, bert_mask_position, max_seq_length, tokenizer)
 
             # Turn it into tensors
             tokens_tensor = torch.tensor([feature.input_ids])
@@ -185,29 +212,25 @@ def main():
                 prediction_scores = output[0]
 
             if isinstance(bert_mask_position, list):
-                predicted_top = prediction_scores[0, bert_mask_position[0]].topk(num_selection * 2)
+                predicted_top = prediction_scores[0, bert_mask_position[0]].topk(num_selections * 2)
             else:
-                predicted_top = prediction_scores[0, bert_mask_position].topk(num_selection * 2)
+                predicted_top = prediction_scores[0, bert_mask_position].topk(num_selections * 2)
 
             predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
-            # if args.analysis:
-                # with open("../analyis.txt", "w") as analysis_file:
-                #     analysis_file.write(sentence + "\t")
-                #     for pred_tok in predicted_tokens:
-                #         analysis_file.write(pred_tok+"\t")
-                #     analysis_file.write("\n")
 
             # A hard cut on the selection, leaving maximum num_selection candidates
-            candidate_words = substitution_selection(complex_words[i],
+            candidate_words = substitution_selection(complex_word,
                                                      predicted_tokens,
                                                      ps,
-                                                     args.analysis,
-                                                     num_selection
+                                                     analysis,
+                                                     evaluation_file_name,
+                                                     model_name,
+                                                     num_selections
                                                      )
 
             candidates_list.append(candidate_words)
 
-            highest_predictions = substitution_ranking(complex_words[i],
+            highest_predictions = substitution_ranking(complex_word,
                                                        mask_context,
                                                        candidate_words,
                                                        embedding_vocab,
@@ -215,7 +238,7 @@ def main():
                                                        word_count,
                                                        tokenizer,
                                                        model,
-                                                       num_selection)
+                                                       num_selections)
 
             for word in highest_predictions:
                 outfile.write("\t" + word)
@@ -228,7 +251,7 @@ def main():
         potential, precision, recall, f_score = generation_evaluation(candidates_list, annotated_subs)
         print("The score of evaluation for substitution selection")
         results_file.write(str(used_model))
-        results_file.write(str(args.num_selections))
+        results_file.write(str(num_selections))
         results_file.write('\t')
         results_file.write(str(potential))
         results_file.write('\t')
