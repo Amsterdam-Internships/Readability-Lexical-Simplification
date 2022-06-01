@@ -1,14 +1,10 @@
+from transformers import BertTokenizer, BertForMaskedLM, BertForPreTraining
+import torch
+from transformers import AdamW
+import pandas as pd
 import os
 import random
-import torch
 import argparse
-import pandas as pd
-
-from transformers import BertTokenizerFast
-from transformers import BertForPreTraining
-from transformers import AdamW
-from tqdm import tqdm
-
 
 class OurDataset(torch.utils.data.Dataset):
     def __init__(self, encodings):
@@ -20,21 +16,21 @@ class OurDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.encodings.input_ids)
 
-
-def create_inputs(tokenizer, sentence_a, sentence_b, label):
-
-    inputs = tokenizer(sentence_a, sentence_b, return_tensors='pt',
-                       max_length=250, truncation=True, padding='max_length')
-
-    inputs['next_sentence_label'] = torch.LongTensor([label]).T
+def create_inputs(tokenizer, text):
+    inputs = tokenizer(text, return_tensors='pt', max_length=250, truncation=True, padding='max_length')
     inputs['labels'] = inputs.input_ids.detach().clone()
-
     rand = torch.rand(inputs.input_ids.shape)
-    mask_arr = (rand < 0.15) * (inputs.input_ids != 101) * (inputs.input_ids != 102) * (inputs.input_ids != 0)
+
+    # create mask array
+    mask_arr = (rand < 0.15) * (inputs.input_ids != 101) * \
+               (inputs.input_ids != 102) * (inputs.input_ids != 0)
 
     selection = []
+
     for i in range(inputs.input_ids.shape[0]):
-        selection.append(torch.flatten(mask_arr[i].nonzero()).tolist())
+        selection.append(
+            torch.flatten(mask_arr[i].nonzero()).tolist()
+        )
 
     for i in range(inputs.input_ids.shape[0]):
         inputs.input_ids[i, selection[i]] = 103
@@ -42,44 +38,13 @@ def create_inputs(tokenizer, sentence_a, sentence_b, label):
     return inputs
 
 
-def get_classification_instances(normal_sents, simple_sents):
-    sentence_a = []
-    sentence_b = []
-    label = []
-
-    for normal_sent, simple_sent in zip(normal_sents, simple_sents):
-
-        random_number = random.random()
-
-        if random_number > 0.5:
-            sentence_a.append(normal_sent)
-            sentence_b.append(simple_sent)
-            label.append(1)
-        else:
-            sentence_a.append(simple_sent)
-            sentence_b.append(normal_sent)
-            label.append(0)
-
-    return sentence_a, sentence_b, label
-
 
 def get_data(num_sents):
-    normal = pd.read_csv("../datasets/Wikipedia simple/normal.aligned", sep="\t",
-                         names=["subject", "nr", "sentence"])
     simple = pd.read_csv("../datasets/Wikipedia simple/simple.aligned", sep="\t",
-                         names=["subject_simple", "nr_simple", "sentence_simple"])
-    combination = pd.concat([simple, normal], axis=1, join="inner")
-    combination = combination.sample(frac=1, random_state=1)
-    combination.drop(['nr', 'subject', 'nr_simple', 'subject_simple'], axis=1)
-    selection = combination[:num_sents]
-    normal_sents = selection['sentence'].tolist()
-    simple_sents = selection['sentence_simple'].tolist()
-
-    return normal_sents, simple_sents
-
-
-if __name__ == "__main__":
-    main()
+                         names=["subject", "nr", "sentence"])
+    simple = simple.sample(frac=1, random_state=1)
+    text = simple["sentence"].tolist()[:num_sents]
+    return text
 
 
 def main(my_args=None):
@@ -112,7 +77,7 @@ def main(my_args=None):
 
         parser.add_argument("--random_seed",
                             type=int,
-                            default=1,
+                            default=3,
                             required=False,
                             help="Directory to store model")
 
@@ -131,42 +96,37 @@ def main(my_args=None):
         model_dir = my_args[3]
         seed = my_args[4]
 
-    tokenizer = BertTokenizerFast.from_pretrained('bert-large-uncased-whole-word-masking')
-    normal_sents, simple_sents = get_data(num_sents)
+    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased-whole-word-masking')
+    model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking')
 
     random.seed(seed)
     torch.manual_seed(seed)
 
-    sentence_a, sentence_b, label = get_classification_instances(normal_sents, simple_sents)
-    inputs = create_inputs(tokenizer, sentence_a, sentence_b, label)
+    text = get_data(num_sents)
+    inputs = create_inputs(tokenizer, text)
     dataset = OurDataset(inputs)
-    loader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=False)
 
-    model = BertForPreTraining.from_pretrained('bert-large-uncased-whole-word-masking')
+    loader = torch.utils.data.DataLoader(dataset, batch_size=2, shuffle=False)
     device = torch.device('cuda')
     model.to(device)
     model.train()
 
     optim = AdamW(model.parameters(), lr=learning_rate)
 
+    from tqdm import tqdm  # for our progress bar
+
     for epoch in range(nr_epochs):
         # setup loop with TQDM and dataloader
-        loop = tqdm(loader, leave=False)
+        loop = tqdm(loader, leave=True)
         for batch in loop:
             # initialize calculated gradients (from prev step)
             optim.zero_grad()
             # pull all tensor batches required for training
             input_ids = batch['input_ids'].to(device)
-            token_type_ids = batch['token_type_ids'].to(device)
             attention_mask = batch['attention_mask'].to(device)
-
-            next_sentence_label = batch['next_sentence_label'].to(device)
-
             labels = batch['labels'].to(device)
-
+            # process
             outputs = model(input_ids, attention_mask=attention_mask,
-                            token_type_ids=token_type_ids,
-                            next_sentence_label=next_sentence_label,
                             labels=labels)
             # extract loss
             loss = outputs.loss
@@ -178,10 +138,16 @@ def main(my_args=None):
             loop.set_description(f'Epoch {epoch}')
             loop.set_postfix(loss=loss.item())
 
-    # Create output directory if needed
     if not os.path.exists(model_dir):
         os.makedirs(model_dir)
 
     model_to_save = model.module if hasattr(model, 'module') else model  # Take care of distributed/parallel training
     model_to_save.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
+
+
+
+
+
+    if __name__ == "__main__":
+        main()

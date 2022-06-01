@@ -798,6 +798,8 @@ def read_eval_dataset_dutch(data_path):
 
             # Retrieve the sentence, complex words and the annotations
             sentence, words = line.strip().split('\t', 1)
+            print(sentence)
+            print(words)
             complex_word, annotations = words.strip().split('\t', 1)
             annotation_list = annotations.split('\t')
 

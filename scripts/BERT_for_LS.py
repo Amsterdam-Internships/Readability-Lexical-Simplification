@@ -50,25 +50,21 @@ def main(my_args=None):
                             type=int,
                             help="Total number of generated simplifications.")
 
-        # # Location of results file
-        # parser.add_argument("--results_file",
-        #                     default=None,
-        #                     type=str,
-        #                     required=True,
-        #                     help="The output directory for the results.")
-        #
-        # # Location of output file
-        # parser.add_argument("--out_file",
-        #                     default=None,
-        #                     type=str,
-        #                     required=True,
-        #                     help="The output directory for generated simplifications.")
-
         parser.add_argument("--analysis",
                             default=False,
                             type=bool,
                             required=False,
                             help="Whether to output analysis information.")
+
+        parser.add_argument("--ranking",
+                            default=False,
+                            type=bool,
+                            help="Whether to perform the ranking procedure as well")
+
+        parser.add_argument("--evaluation",
+                            default=True,
+                            type=bool,
+                            help="Whether to calculate performance scores")
 
 
         # Parsing Command line input
@@ -82,6 +78,8 @@ def main(my_args=None):
         # results_file = open(args.results_file, "a+")
         # out_file = args.out_file
         analysis = args.analysis
+        ranking = args.ranking
+        evaluation = args.evaluation
 
     else:
         # Parsing internal input
@@ -93,6 +91,8 @@ def main(my_args=None):
         # results_file = open(my_args[4], "a+")
         # out_file = my_args[5]
         analysis = bool(my_args[4])
+        ranking = bool(my_args[5])
+        evaluation = bool(my_args[6])
 
     model_name = used_model.replace("../models/", "").replace("/","")
 
@@ -114,26 +114,26 @@ def main(my_args=None):
         model = BertForPreTraining.from_pretrained(used_model)
         tokenizer = BertTokenizer.from_pretrained(used_model)
 
-    if "dutch" in used_model:  # If it's a dutch model, it needs the dutch files
-        logger.info("you are using a Dutch model")
-        embedding_path = "../models/wikipedia-320.txt"
-        word_count_path = "../datasets/dutch_frequencies.txt"
-        lower_case = False
+    if ranking:
+        if "dutch" in used_model:  # If it's a dutch model, it needs the dutch files
+            logger.info("you are using a Dutch model")
+            embedding_path = "../models/wikipedia-320.txt"
+            word_count_path = "../datasets/dutch_frequencies.txt"
+            lower_case = False
 
-    else:  # And the English for the English
-        embedding_path = "../models/crawl-300d-2M-subword.vec"
-        word_count_path = "../datasets/frequency_merge_wiki_child.txt"
-        lower_case = True
+        else:  # And the English for the English
+            embedding_path = "../models/crawl-300d-2M-subword.vec"
+            word_count_path = "../datasets/frequency_merge_wiki_child.txt"
+            lower_case = True
 
-    # Loading in Embeddings
-    logger.info("Loading embeddings ...")
+        # Loading in Embeddings
+        logger.info("Loading embeddings ...")
 
-    word_count = get_word_count(word_count_path)  # This is a dictionary with the shape word: frequency
+        word_count = get_word_count(word_count_path)  # This is a dictionary with the shape word: frequency
 
-    # vocabulary of embedding model in a list, and corresponding emb values in another
-    embedding_vocab, embedding_vectors = get_words_and_vectors(embedding_path)
-    logger.info("Done loading embeddings!")
-
+        # vocabulary of embedding model in a list, and corresponding emb values in another
+        embedding_vocab, embedding_vectors = get_words_and_vectors(embedding_path)
+        logger.info("Done loading embeddings!")
     # Toward Generating the Substitutions:
     candidates_list = []
     final_predictions = []
@@ -230,15 +230,19 @@ def main(my_args=None):
 
             candidates_list.append(candidate_words)
 
-            highest_predictions = substitution_ranking(complex_word,
-                                                       mask_context,
-                                                       candidate_words,
-                                                       embedding_vocab,
-                                                       embedding_vectors,
-                                                       word_count,
-                                                       tokenizer,
-                                                       model,
-                                                       num_selections)
+            if ranking:
+
+                highest_predictions = substitution_ranking(complex_word,
+                                                           mask_context,
+                                                           candidate_words,
+                                                           embedding_vocab,
+                                                           embedding_vectors,
+                                                           word_count,
+                                                           tokenizer,
+                                                           model,
+                                                           num_selections)
+            else:
+                highest_predictions = candidate_words
 
             for word in highest_predictions:
                 outfile.write("\t" + word)
@@ -247,7 +251,7 @@ def main(my_args=None):
             predicted_word = highest_predictions[0]
             final_predictions.append(predicted_word)
 
-    if "dutch" not in used_model:
+    if evaluation:
         potential, precision, recall, f_score = generation_evaluation(candidates_list, annotated_subs)
         print("The score of evaluation for substitution selection")
         results_file.write(str(used_model))
@@ -263,19 +267,20 @@ def main(my_args=None):
         results_file.write('\t')
         print(potential, precision, recall, f_score)
 
-    precision, accuracy, changed_proportion = pipeline_evaluation(final_predictions,
-                                                                  complex_words,
-                                                                  annotated_subs)
-    print("The score of evaluation for full LS pipeline")
-    print(precision, accuracy, changed_proportion)
-    results_file.write(str(precision))
-    results_file.write('\t')
-    results_file.write(str(accuracy))
-    results_file.write('\t')
-    results_file.write(str(changed_proportion))
-    results_file.write('\n')
+        if ranking:
+            precision, accuracy, changed_proportion = pipeline_evaluation(final_predictions,
+                                                                      complex_words,
+                                                                      annotated_subs)
+            print("The score of evaluation for full LS pipeline")
+            print(precision, accuracy, changed_proportion)
+            results_file.write(str(precision))
+            results_file.write('\t')
+            results_file.write(str(accuracy))
+            results_file.write('\t')
+            results_file.write(str(changed_proportion))
+            results_file.write('\n')
 
-    results_file.close()
+        results_file.close()
 
 
 if __name__ == "__main__":

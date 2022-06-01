@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 num_sent = 10000
 evaluation_data = "../datasets/NNSeval.txt"
 lr = 5e-6
-random_seeds = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+random_seeds = [1, 2, 4, 5, 6, 7, 8, 9, 10]
 num_epochs = 2
 
 i = 0
