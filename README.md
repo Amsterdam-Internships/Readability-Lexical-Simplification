@@ -31,8 +31,6 @@ In order to run all steps of the lexical simplification pipeline, follow these s
     ```bash
     git clone https://github.com/Amsterdam-Internships/Readability-Lexical-Simplification
     ```
-   ```
-
 1) Install all dependencies:
     ```bash
     pip install -r requirements.txt
@@ -54,7 +52,7 @@ Simplifications can be made on English and Dutch. They require a number of files
 
 Then the model can be run as follows:
 ```
-python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datasets/Dutch/dutch_sents_for_annotation.txt --results_file ../results/dutch_base_results.txt --out_file ../results/dutch_base_perfromance.txt
+python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datasets/Dutch/dutch_data.txt
 ```
 
 |Argument | Type or Action | Description | Default |
@@ -62,8 +60,10 @@ python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datase
 |`--model`| str| `the name of the model that is used for generating the predictions: a path to a folder or a huggingface directory.`|  -|
 |`--eval_dir`| str| `path to the file with the to-be-simplified sentences.`| -|
 |`--results_file`|  str | `path to file where the performance report is written out`| -|
-|`--out_file`| str| `path to file where all the model's predictions are `|-|
 |`--analysis`| Bool| `whether or not to output all the generated candidates and the reason for their removal `|False|
+|`--ranking`| Bool| `whether or not to perform ranking of the generated candidates`|False|
+|`--evaluation`| Bool| `whether or not to perform an evaluation of the generated candidates`|True|
+
 |---|:---:|:---:|:---:|
 
 ---
