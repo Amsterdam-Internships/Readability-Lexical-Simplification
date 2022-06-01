@@ -114,17 +114,21 @@ def main(my_args=None):
         model = BertForPreTraining.from_pretrained(used_model)
         tokenizer = BertTokenizer.from_pretrained(used_model)
 
+    if "dutch" in used_model:
+        lower_case = False
+    else:
+        lower_case = True
+
     if ranking:
         if "dutch" in used_model:  # If it's a dutch model, it needs the dutch files
             logger.info("you are using a Dutch model")
             embedding_path = "../models/wikipedia-320.txt"
             word_count_path = "../datasets/dutch_frequencies.txt"
-            lower_case = False
+
 
         else:  # And the English for the English
             embedding_path = "../models/crawl-300d-2M-subword.vec"
             word_count_path = "../datasets/frequency_merge_wiki_child.txt"
-            lower_case = True
 
         # Loading in Embeddings
         logger.info("Loading embeddings ...")
