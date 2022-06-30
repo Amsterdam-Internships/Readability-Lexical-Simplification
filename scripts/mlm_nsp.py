@@ -3,11 +3,15 @@ import random
 import torch
 import argparse
 import pandas as pd
+import logging
 
 from transformers import BertTokenizerFast
-from transformers import BertForPreTraining
+from transformers import BertForPreTraining, BertTokenizer, BertForMaskedLM
 from transformers import AdamW
 from tqdm import tqdm
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class OurDataset(torch.utils.data.Dataset):
@@ -42,40 +46,81 @@ def create_inputs(tokenizer, sentence_a, sentence_b, label):
     return inputs
 
 
-def get_classification_instances(normal_sents, simple_sents):
+def get_classification_instances(pages, num_sents):
     sentence_a = []
     sentence_b = []
     label = []
 
-    for normal_sent, simple_sent in zip(normal_sents, simple_sents):
+    text = ""
+    for page in pages.values():
+        text += page
 
-        random_number = random.random()
-
-        if random_number > 0.5:
-            sentence_a.append(normal_sent)
-            sentence_b.append(simple_sent)
-            label.append(1)
-        else:
-            sentence_a.append(simple_sent)
-            sentence_b.append(normal_sent)
-            label.append(0)
+    bag = [item for sentence in text for item in sentence.split('.') if item != '']
+    bag_size = len(bag)
+    i=0
+    for title, text in pages.items():
+        if i>num_sents:
+            break
+        i+=1
+        sentences = [sentence for sentence in text.split('.') if sentence != '']
+        num_sentences = len(sentences)
+        if num_sentences > 1:
+            start = random.randint(0, num_sentences - 2)
+            # 50/50 whether is IsNextSentence or NotNextSentence
+            if random.random() >= 0.5:
+                # this is IsNextSentence
+                sentence_a.append(sentences[start])
+                sentence_b.append(sentences[start + 1])
+                label.append(0)
+            else:
+                index = random.randint(0, bag_size - 1)
+                # this is NotNextSentence
+                sentence_a.append(sentences[start])
+                sentence_b.append(bag[index])
+                label.append(1)
 
     return sentence_a, sentence_b, label
 
+def get_Dutch_data(num_sents, level):
+
+    path = "../datasets/wablief_sents"
+
+    pages = dict()
+
+    for filename in os.listdir(path):
+        f = os.path.join(path, filename)
+        if os.path.isfile(f):
+            pages[filename] = ""
+            with open (f,"r") as infile:
+                data = infile.readlines()
+            for row in data:
+                row = row.strip()
+                pages[filename] += row
+    print(pages[filename])
+    return pages
 
 def get_data(num_sents):
-    normal = pd.read_csv("../datasets/Wikipedia simple/normal.aligned", sep="\t",
-                         names=["subject", "nr", "sentence"])
-    simple = pd.read_csv("../datasets/Wikipedia simple/simple.aligned", sep="\t",
-                         names=["subject_simple", "nr_simple", "sentence_simple"])
-    combination = pd.concat([simple, normal], axis=1, join="inner")
-    combination = combination.sample(frac=1, random_state=1)
-    combination.drop(['nr', 'subject', 'nr_simple', 'subject_simple'], axis=1)
-    selection = combination[:num_sents]
-    normal_sents = selection['sentence'].tolist()
-    simple_sents = selection['sentence_simple'].tolist()
+    with open("../datasets/wikisimple.txt", "r") as infile:
+        data = infile.readlines()
 
-    return normal_sents, simple_sents
+    pages = dict()
+    new_page = True
+
+    for row in data:
+        row = row.strip()
+
+        if new_page:
+            subject = row
+            pages[subject] = ""
+            new_page = False
+
+        elif row == "":
+            new_page = True
+
+        else:
+            pages[subject] = pages[subject] + row
+
+    return pages
 
 
 def main(my_args=None):
@@ -86,7 +131,7 @@ def main(my_args=None):
         parser.add_argument("--nr_sents",
                             default=10000,
                             type=int,
-                            required=True,
+                            required=False,
                             help="Number of sentences")
 
         parser.add_argument("--lr",
@@ -112,6 +157,17 @@ def main(my_args=None):
                             required=False,
                             help="Directory to store model")
 
+        parser.add_argument("--language",
+                           default="English",
+                           type=str,
+                           required=True,
+                           help="To finetune the English or the Dutch model")
+
+        parser.add_argument("--level",
+                           default="Accepted",
+                           type=str,
+                           required=False,
+                           help="The level of the dutch texts")
         args = parser.parse_args()
 
         num_sents = args.nr_sents
@@ -119,6 +175,8 @@ def main(my_args=None):
         learning_rate = args.lr
         model_dir = args.model_directory
         seed = args.random_seed
+        language = args.language
+        level = args.level
 
     else:
         num_sents = my_args[0]
@@ -126,19 +184,37 @@ def main(my_args=None):
         learning_rate = my_args[2]
         model_dir = my_args[3]
         seed = my_args[4]
+        language = my_args[5]
+        level = my_args[6]
 
-    tokenizer = BertTokenizerFast.from_pretrained('bert-large-uncased-whole-word-masking')
-    normal_sents, simple_sents = get_data(num_sents)
+    if language == "English":
+        logger.info("you are training an English model")
+        tokenizer = BertTokenizer.from_pretrained('bert-large-uncased-whole-word-masking')
+        model = BertForPreTraining.from_pretrained('bert-large-uncased-whole-word-masking')
+
+    if language == "Dutch":
+        logger.info("you are training a Dutch model")
+        tokenizer = BertTokenizer.from_pretrained('GroNLP/bert-base-dutch-cased')
+        model = BertForPreTraining.from_pretrained('GroNLP/bert-base-dutch-cased')
 
     random.seed(seed)
     torch.manual_seed(seed)
 
-    sentence_a, sentence_b, label = get_classification_instances(normal_sents, simple_sents)
+    if language == "English":
+        text = get_data(num_sents)
+
+    if language == "Dutch":
+        text = get_Dutch_data(num_sents, level)
+
+    # pages = get_data(num_sents)
+
+    sentence_a, sentence_b, label = get_classification_instances(text, num_sents)
+    print("length of input:", len(sentence_a))
+
     inputs = create_inputs(tokenizer, sentence_a, sentence_b, label)
     dataset = OurDataset(inputs)
     loader = torch.utils.data.DataLoader(dataset, batch_size=4, shuffle=False)
 
-    model = BertForPreTraining.from_pretrained('bert-large-uncased-whole-word-masking')
     device = torch.device('cuda')
     model.to(device)
     model.train()

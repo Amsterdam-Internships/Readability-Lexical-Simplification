@@ -5,6 +5,11 @@ import pandas as pd
 import os
 import random
 import argparse
+import logging
+from tqdm import tqdm  # for our progress bar
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class OurDataset(torch.utils.data.Dataset):
     def __init__(self, encodings):
@@ -37,9 +42,15 @@ def create_inputs(tokenizer, text):
 
     return inputs
 
+def get_Dutch_data(num_sents, level):
+    with open ("../datasets/sentences_"+level+".txt", "r") as infile:
+        data = infile.readlines()
+        data = [i.strip() for i in data][:num_sents]
+        print(data)
+        text = data
+        return text
 
-
-def get_data(num_sents):
+def get_English_data(num_sents):
     simple = pd.read_csv("../datasets/Wikipedia simple/simple.aligned", sep="\t",
                          names=["subject", "nr", "sentence"])
     simple = simple.sample(frac=1, random_state=1)
@@ -50,12 +61,14 @@ def get_data(num_sents):
 def main(my_args=None):
 
     if my_args is None:
+        logger.info("begin")
+
         parser = argparse.ArgumentParser()
 
         parser.add_argument("--nr_sents",
                             default=10000,
                             type=int,
-                            required=True,
+                            required=False,
                             help="Number of sentences")
 
         parser.add_argument("--lr",
@@ -81,13 +94,27 @@ def main(my_args=None):
                             required=False,
                             help="Directory to store model")
 
+        parser.add_argument("--language",
+                           default="English",
+                           type=str,
+                           required=True,
+                           help="To finetune the English or the Dutch model")
+
+        parser.add_argument("--level",
+                           default="Accepted",
+                           type=str,
+                           required=False,
+                           help="The level of the dutch texts")
+
         args = parser.parse_args()
 
         num_sents = args.nr_sents
         nr_epochs = args.epochs
         learning_rate = args.lr
         model_dir = args.model_directory
-        seed = args.random_seed
+        seed = args.random_seedu
+        language = args.language
+        level = args.level
 
     else:
         num_sents = my_args[0]
@@ -95,14 +122,29 @@ def main(my_args=None):
         learning_rate = my_args[2]
         model_dir = my_args[3]
         seed = my_args[4]
+        language = my_args[5]
+        level = my_args[6]
 
-    tokenizer = BertTokenizer.from_pretrained('bert-large-uncased-whole-word-masking')
-    model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking')
+    if language == "English":
+        logger.info("you are training an English model")
+        tokenizer = BertTokenizer.from_pretrained('bert-large-uncased-whole-word-masking')
+        model = BertForMaskedLM.from_pretrained('bert-large-uncased-whole-word-masking')
+
+    if language == "Dutch":
+        logger.info("you are training a Dutch model")
+        tokenizer = BertTokenizer.from_pretrained('GroNLP/bert-base-dutch-cased')
+        model = BertForMaskedLM.from_pretrained('GroNLP/bert-base-dutch-cased')
 
     random.seed(seed)
     torch.manual_seed(seed)
 
-    text = get_data(num_sents)
+    if language == "English":
+        text = get_English_data(num_sents)
+
+    if language == "Dutch":
+        text = get_Dutch_data(num_sents, level)
+
+    # text = get_data(num_sents)
     inputs = create_inputs(tokenizer, text)
     dataset = OurDataset(inputs)
 
@@ -113,7 +155,6 @@ def main(my_args=None):
 
     optim = AdamW(model.parameters(), lr=learning_rate)
 
-    from tqdm import tqdm  # for our progress bar
 
     for epoch in range(nr_epochs):
         # setup loop with TQDM and dataloader
@@ -145,9 +186,5 @@ def main(my_args=None):
     model_to_save.save_pretrained(model_dir)
     tokenizer.save_pretrained(model_dir)
 
-
-
-
-
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()

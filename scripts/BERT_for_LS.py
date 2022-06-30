@@ -1,7 +1,9 @@
 import logging
 import argparse
+import spacy
 
 from nltk import PorterStemmer
+from nltk.stem import SnowballStemmer
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 from utils2 import *
 from transformers import BertForPreTraining, BertTokenizer
@@ -21,7 +23,7 @@ def main(my_args=None):
     parser = argparse.ArgumentParser()
     global complex_words
 
-    if my_args ==None:
+    if my_args is None:
 
         # Model to be run:
         parser.add_argument("--model",
@@ -66,7 +68,6 @@ def main(my_args=None):
                             type=bool,
                             help="Whether to calculate performance scores")
 
-
         # Parsing Command line input
         args = parser.parse_args()
 
@@ -94,12 +95,10 @@ def main(my_args=None):
         ranking = bool(my_args[5])
         evaluation = bool(my_args[6])
 
-    model_name = used_model.replace("../models/", "").replace("/","")
+    model_name = used_model.replace("../models/", "").replace("/", "")
 
-    results_file = open(f"../results/{evaluation_file_name}_{model_name}_results.txt","a")
+    results_file = open(f"../results/{evaluation_file_name}_{model_name}_results.txt", "a")
     out_file = f"../results/{evaluation_file_name}_{model_name}_outputs.txt"
-
-    ps = PorterStemmer()     # Loading the stemmer
 
     # Loading in the Model & Tokenizer
     logger.info("Loading the model and tokenizer")
@@ -115,16 +114,22 @@ def main(my_args=None):
         tokenizer = BertTokenizer.from_pretrained(used_model)
 
     if "dutch" in used_model:
-        lower_case = False
+        logger.info("you are using a dutch model")
+        lower_case = True
+        stemmer = SnowballStemmer("dutch")
+        lemmatizer = True
+        nlp = spacy.load("nl_core_news_sm")
     else:
         lower_case = True
+        stemmer = PorterStemmer()  # Loading the stemmer
+        lemmatizer = False
+        # nlp = spacy.load("nl_core_news_sm")
 
     if ranking:
         if "dutch" in used_model:  # If it's a dutch model, it needs the dutch files
             logger.info("you are using a Dutch model")
             embedding_path = "../models/wikipedia-320.txt"
             word_count_path = "../datasets/dutch_frequencies.txt"
-
 
         else:  # And the English for the English
             embedding_path = "../models/crawl-300d-2M-subword.vec"
@@ -178,13 +183,17 @@ def main(my_args=None):
 
             # Making a mapping between BERT's subword tokenized sent and nltk tokenized sent
             bert_sent, nltk_sent, bert_token_positions = convert_sentence_to_token(sentence, max_seq_length,
-                                                                                   tokenizer)
+                                                                                   tokenizer, lower_case)
             logger.info(f"bert sent:{bert_sent}")
             logger.info(f"nltk sent:{nltk_sent}")
             # Check alignment
             assert len(nltk_sent) == len(bert_token_positions)
 
-            complex_word = complex_words[i].lower()
+            if lower_case:
+                complex_word = complex_words[i].lower()
+            else:
+                complex_word = complex_words[i]
+
             logger.info(f"complex word: {complex_word}")
 
             mask_index = nltk_sent.index(complex_word)  # the location of the complex word:
@@ -222,16 +231,28 @@ def main(my_args=None):
 
             predicted_tokens = tokenizer.convert_ids_to_tokens(predicted_top[1])
 
-            # A hard cut on the selection, leaving maximum num_selection candidates
-            candidate_words = substitution_selection(complex_word,
-                                                     predicted_tokens,
-                                                     ps,
-                                                     analysis,
-                                                     evaluation_file_name,
-                                                     model_name,
-                                                     num_selections
-                                                     )
+            # A hard cut on the selsection, leaving maximum num_selection candidates
 
+            if not lemmatizer:
+
+                candidate_words = substitution_selection(complex_word,
+                                                         predicted_tokens,
+                                                         stemmer,
+                                                         analysis,
+                                                         evaluation_file_name,
+                                                         model_name,
+                                                         num_selections
+                                                         )
+            else:
+                candidate_words = substitution_selection_lemmatized(complex_word,
+                                                                    predicted_tokens,
+                                                                    stemmer,
+                                                                    analysis,
+                                                                    evaluation_file_name,
+                                                                    model_name,
+                                                                    nlp,
+                                                                    num_selections
+                                                                    )
             candidates_list.append(candidate_words)
 
             if ranking:

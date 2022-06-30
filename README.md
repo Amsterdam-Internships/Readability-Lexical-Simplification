@@ -1,13 +1,12 @@
 # Readability : Contextualized Lexical Simplification
 
-This repository contains all code that has been used for my Master thesis on Contextualized Lexical Simplification. The repository, like my thesis is a work in progress.
+This repository contains all code that has been used for my Master thesis on Contextualized Lexical Simplification.
 
 ![img.png](media/img.png)
 
 [comment]: <> (![]&#40;media/examples/emojis.png&#41;)
 
 ---
-
 
 ## Project Folder Structure
 
@@ -32,57 +31,95 @@ In order to run all steps of the lexical simplification pipeline, follow these s
     git clone https://github.com/Amsterdam-Internships/Readability-Lexical-Simplification
     ```
 1) Install all dependencies:
-    ```bash
+
     pip install -r requirements.txt
     ```
 ---
 
 
-## Usage
+## Deploying the pipeline
 
 Simplifications can be made on English and Dutch. They require a number of files:
 
-**Deploying the pipeline for English** 
+**Steps Needed for Running the model for English** 
 1) Download a word embedding model from (fasttext) and store it in the models folder as __crawl-300d-2M-subword.vec__
 1) Download the BenchLS, NNSeval and lex.mturk datasets from https://simpatico-project.com/?page_id=109 dataset and store them in the models folder
 
-**Deploying the pipeline for Dutch**
-1) Download the word embedding model from https://dumps.wikimedia.org/nlwiki/20160501/ and store it in the models folder as __wikipedia-320.txt__
+Then, the model can be run as follows:
+```
+python3 BERT_for_LS.py --model bert-large-uncased-whole-word-masking --eval_dir ../datasets/Dutch/dutch_data.txt 
+```
 
+
+**Steps Needed for Running the model for Dutch**
+1) Download the word embedding model from https://dumps.wikimedia.org/nlwiki/20160501/ and store it in the models folder as __wikipedia-320.txt__
 
 Then the model can be run as follows:
 ```
 python3 BERT_for_LS.py --model GroNLP/bert-base-dutch-cased --eval_dir ../datasets/Dutch/dutch_data.txt
 ```
 
+**Additional Arguments can be passed:**
+
 |Argument | Type or Action | Description | Default |
 |---|:---:|:---:|:---:|
 |`--model`| str| `the name of the model that is used for generating the predictions: a path to a folder or a huggingface directory.`|  -|
 |`--eval_dir`| str| `path to the file with the to-be-simplified sentences.`| -|
-|`--results_file`|  str | `path to file where the performance report is written out`| -|
 |`--analysis`| Bool| `whether or not to output all the generated candidates and the reason for their removal `|False|
 |`--ranking`| Bool| `whether or not to perform ranking of the generated candidates`|False|
 |`--evaluation`| Bool| `whether or not to perform an evaluation of the generated candidates`|True|
-
-|---|:---:|:---:|:---:|
-
+|`--num_selections`| int| `the amount of candidates to generate`|10|
 ---
 
 ## Finetuning a Model
 
-Can be done in one of two ways: todo explain
+**Requirements for fine-tuning**
+English:
+1) Download the simple--regular aligned wikipedia corpus
+2) Download the simple wikipedia corpus
 
-## Generating Dutch Dataset Sentence
-Todo clean and commit
+Dutch:
+1) Download wablieft corpus
+2) Download domain-specific data
 
-## How it works
+Can be done in three ways:  
+1) Masked language modelling: 
+   ```
+   python3 only_mlm.py  --nr_sents 10000   
+                        --epochs 2
+                        --model_directory ../models/MLM_model
+                        --seed 3
+                        --language nl
+                        --level simple
+   ```
+1) Masked language modelling and next token prediction:
+   ```
+   python3 mlm_nsp.py   --nr_sents 10000   
+                        --epochs 2
+                        --model_directory ../models/MLM_model
+                        --seed 3
+                        --language nl
+   ```
+1) Masked language modelling and simplification prediction:
+   ```
+   python3 finetuning.py   --nr_sents 10000   
+                           --epochs 2
+                           --model_directory ../models/MLM_model
+                           --seed 3
+   ```
+
+
+
+
+
+## Notebooks
+Notebooks for analyses
 
 
 ## Acknowledgements
 
 
-Don't forget to acknowledge any work by others that you have used for your project. Add links and check whether the authors have explicitly stated citation preference for using the DOI or citing a paper or so. 
-For example:
-
-[comment]: <> (Our code uses [YOLOv5]&#40;https://github.com/ultralytics/yolov5&#41; [![DOI]&#40;https://zenodo.org/badge/264818686.svg&#41;]&#40;https://zenodo.org/badge/latestdoi/264818686&#41;)
 This code is based on the LSBert pipeline: https://github.com/qiang2100/BERT-LS
+
+The file "dutch frequencies" is the processed version of SUBTLEX NL (http://crr.ugent.be/programs-data/subtitle-frequencies/subtlex-nl)
+
